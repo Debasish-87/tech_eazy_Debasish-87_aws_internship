@@ -1,0 +1,31 @@
+{
+  "info": {
+    "name": "Techeazy App - DevOps EC2 Test",
+    "_postman_id": "abc12345-6789-1011-1213-141516171819",
+    "description": "Postman collection to test the deployed Techeazy app on EC2 using HTTP GET request.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check - GET /",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://{{base_url}}/",
+          "protocol": "http",
+          "host": ["{{base_url}}"],
+          "path": [""]
+        }
+      },
+      "response": []
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "65.2.189.99"
+    }
+  ]
+}
