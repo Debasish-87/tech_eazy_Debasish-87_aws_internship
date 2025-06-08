@@ -1,7 +1,6 @@
-# Ignore Terraform files and providers
+# Terraform
 .terraform/
 *.tfstate
 *.tfstate.backup
-crash.log
 *.tfvars
 .terraform.lock.hcl
