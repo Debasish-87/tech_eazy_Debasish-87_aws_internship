@@ -18,10 +18,13 @@ export PATH=$JAVA_HOME/bin:$PATH
 
 cd /home/ubuntu
 
-git clone https://github.com/techeazy-consulting/techeazy-devops.git
+if [ ! -d "techeazy-devops" ]; then
+  git clone https://github.com/techeazy-consulting/techeazy-devops.git
+else
+  echo "Repo already cloned."
+fi
 
 cd techeazy-devops
-
 chown -R ubuntu:ubuntu /home/ubuntu/techeazy-devops
 chmod +x mvnw
 export HOME=/home/ubuntu
@@ -50,10 +53,10 @@ sudo -u ubuntu ./mvnw clean package
 sudo -u ubuntu nohup ./mvnw spring-boot:run > app.log 2>&1 &
 
 
-shutdown -h +15
+shutdown -h +30
 
 
-BUCKET_NAME="${logs_bucket_name}"  
+BUCKET_NAME="${logs_bucket_name}" 
 DATE=$(date +%F-%T)
 
 aws s3 cp /var/log/startup.log s3://$BUCKET_NAME/ec2_logs/startup-$DATE.log
