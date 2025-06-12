@@ -25,12 +25,12 @@ variable "ami_id" {
 
 variable "key_name" {
   type    = string
-  default = "debasish-key"
+  default = "debasishkey"
 }
 
 variable "environment" {
   type    = string
-  default = "dev"
+  default = "Dev"
 }
 
 variable "project_name" {
