@@ -9,7 +9,7 @@ on:
 
 jobs:
   deploy:
-    name: Terraform Deploy & App Setup
+    name: Terraform Deployment & App Setup
     runs-on: ubuntu-latest
 
     env:
@@ -17,7 +17,7 @@ jobs:
       STAGE: dev
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
       - name: Configure AWS Credentials
@@ -27,7 +27,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.6
@@ -37,17 +37,22 @@ jobs:
 
       - name: Import Existing AWS Resources (if present)
         run: |
-          terraform import aws_iam_role.s3_read_role dev_s3_read_role || echo "already exists"
-          terraform import aws_iam_role.s3_write_role dev_s3_write_role || echo "already exists"
-          terraform import aws_iam_instance_profile.ec2_profile dev_ec2_profile || echo "already exists"
-          terraform import aws_s3_bucket.logs_bucket techeazy-dev-logs-debasish-87 || echo "already exists"
-          terraform import aws_vpc.custom_vpc vpc-02a5c867828fae501 || echo "already exists"
-          terraform import aws_subnet.public_subnet subnet-06f2a6824f4d9f9bb || echo "already exists"
-          terraform import aws_internet_gateway.igw igw-0b2df034e86179a3a || echo "already exists"
-          terraform import aws_route_table.public_rt rtb-0596d2616d0a53cec || echo "already exists"
-          terraform import aws_security_group.web_security_group sg-0a512591fe6a8cb72 || echo "already exists"
-          terraform import aws_route_table_association.public_subnet_association rtbassoc-0f840f2573a942560 || echo "already exists"
-          # aur bhi resources ho to yaha add karo
+          RESOURCES=(
+            "aws_iam_role.s3_read_role dev_s3_read_role"
+            "aws_iam_role.s3_write_role dev_s3_write_role"
+            "aws_iam_instance_profile.ec2_profile dev_ec2_profile"
+            "aws_s3_bucket.logs_bucket techeazy-dev-logs-debasish-87"
+            "aws_vpc.custom_vpc vpc-02a5c867828fae501"
+            "aws_subnet.public_subnet subnet-06f2a6824f4d9f9bb"
+            "aws_internet_gateway.igw igw-0b2df034e86179a3a"
+            "aws_route_table.public_rt rtb-0596d2616d0a53cec"
+            "aws_security_group.web_security_group sg-0a512591fe6a8cb72"
+            "aws_route_table_association.public_subnet_association rtbassoc-0f840f2573a942560"
+          )
+
+          for resource in "${RESOURCES[@]}"; do
+            terraform import $resource || echo "$resource already exists or failed to import"
+          done
 
       - name: Terraform Plan
         run: terraform plan -var-file="dev_config.tfvars"
@@ -55,7 +60,7 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve -var-file="dev_config.tfvars"
 
-      - name: Get EC2 Public IP
+      - name: Fetch EC2 Public IP
         id: ec2
         run: |
           echo "PUBLIC_IP=$(terraform output -raw instance_public_ip)" >> "$GITHUB_ENV"
@@ -63,20 +68,21 @@ jobs:
       - name: Wait for EC2 SSH to be Ready
         run: |
           for i in {1..30}; do
-            if nc -zv $PUBLIC_IP 22; then echo "SSH available"; break; fi
-            echo "Waiting for SSH..."; sleep 10
+            nc -zv $PUBLIC_IP 22 && echo "SSH available" && break
+            echo "Waiting for SSH... ($i/30)"; sleep 10
           done
 
       - name: Setup SSH Key
+        id: ssh_key
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
           chmod 400 key.pem
 
-      - name: Copy Deployment Script to EC2
+      - name: Transfer Deployment Script
         run: |
           scp -o StrictHostKeyChecking=no -i key.pem user_data.sh ubuntu@$PUBLIC_IP:/tmp/user_data.sh
 
-      - name: Execute Setup Script on EC2
+      - name: Execute Remote Deployment Script
         run: |
           ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$PUBLIC_IP 'bash /tmp/user_data.sh'
 
@@ -84,11 +90,21 @@ jobs:
         run: |
           for i in {1..10}; do
             if curl -s --head http://$PUBLIC_IP | grep "200 OK"; then
-              echo "App is healthy!"; exit 0
+              echo "✅ App is healthy!"
+              exit 0
             fi
-            echo "Waiting for app..."; sleep 10
+            echo "Waiting for app... ($i/10)"; sleep 10
           done
-          echo "App failed health check."; exit 1
+          echo "❌ App failed health check."; exit 1
+
+      - name: Upload Deployment Logs (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-logs
+          path: |
+            terraform.tfstate
+            /tmp/user_data.sh
 
       - name: Create Pull Request from PS-3 to PS-2
         uses: peter-evans/create-pull-request@v5
@@ -97,9 +113,9 @@ jobs:
           commit-message: "Auto PR: Assignment 3 - Infra + Deployment"
           title: "Assignment 3 - Deploy via GitHub Actions"
           body: |
-            - EC2 provisioned via Terraform
-            - App deployed via SSH and shell script
-            - Logs uploaded to S3
-            - Health check passed on port 80
+            - ✅ EC2 provisioned via Terraform
+            - 🚀 App deployed and configured via SSH
+            - 📦 Logs optionally uploaded to S3
+            - 🟢 Health check passed on port 80
           base: feature/devops-assignment-2-v2
           branch: feature/devops-assignment-3
