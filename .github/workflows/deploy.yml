@@ -1,0 +1,88 @@
+name: Deploy Infrastructure and App
+
+on:
+  push:
+    branches:
+      - feature/devops-assignment-3
+    tags:
+      - deploy-*
+
+jobs:
+  deploy:
+    name: Terraform Deploy & App Setup
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ap-south-1
+      STAGE: dev
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -var-file="dev_config.tfvars"
+
+      - name: Get EC2 Public IP
+        id: ec2
+        run: |
+          echo "PUBLIC_IP=$(terraform output -raw instance_public_ip)" >> "$GITHUB_ENV"
+
+      - name: Wait for EC2 SSH to be Ready
+        run: |
+          for i in {1..30}; do
+            if nc -zv $PUBLIC_IP 22; then echo "SSH available"; break; fi
+            echo "Waiting for SSH..."; sleep 10
+          done
+
+      - name: Setup SSH Key
+        run: |
+          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+          chmod 400 key.pem
+
+      - name: Copy Deployment Script to EC2
+        run: |
+          scp -o StrictHostKeyChecking=no -i key.pem user_data.sh ubuntu@$PUBLIC_IP:/tmp/user_data.sh
+
+      - name: Execute Setup Script on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$PUBLIC_IP 'bash /tmp/user_data.sh'
+
+      - name: Health Check on Port 80
+        run: |
+          for i in {1..10}; do
+            if curl -s --head http://$PUBLIC_IP | grep "200 OK"; then
+              echo "App is healthy!"; exit 0
+            fi
+            echo "Waiting for app..."; sleep 10
+          done
+          echo "App failed health check."; exit 1
+
+      - name: Create Pull Request from PS-3 to PS-2
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Auto PR: Assignment 3 - Infra + Deployment"
+          title: "Assignment 3 - Deploy via GitHub Actions"
+          body: |
+            - EC2 provisioned via Terraform
+            - App deployed via SSH and shell script
+            - Logs uploaded to S3
+            - Health check passed on port 80
+          base: feature/devops-assignment-2-v2
+          branch: feature/devops-assignment-3
