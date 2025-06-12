@@ -35,7 +35,7 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Import Existing AWS Resources (if present)
+      - name: Import Existing AWS Resources (with timeout)
         run: |
           RESOURCES=(
             "aws_iam_role.s3_read_role dev_s3_read_role"
@@ -51,7 +51,8 @@ jobs:
           )
 
           for resource in "${RESOURCES[@]}"; do
-            terraform import $resource || echo "$resource already exists or failed to import"
+            echo "⏳ Importing $resource..."
+            timeout 15 terraform import $resource || echo "⚠️ Skipped (exists or error): $resource"
           done
 
       - name: Terraform Plan
@@ -68,12 +69,12 @@ jobs:
       - name: Wait for EC2 SSH to be Ready
         run: |
           for i in {1..30}; do
-            nc -zv $PUBLIC_IP 22 && echo "SSH available" && break
-            echo "Waiting for SSH... ($i/30)"; sleep 10
+            nc -zv $PUBLIC_IP 22 && echo "✅ SSH available!" && exit 0
+            echo "⏳ Waiting for SSH... ($i/30)"; sleep 10
           done
+          echo "❌ SSH not ready after timeout."; exit 1
 
       - name: Setup SSH Key
-        id: ssh_key
         run: |
           echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
           chmod 400 key.pem
@@ -93,11 +94,11 @@ jobs:
               echo "✅ App is healthy!"
               exit 0
             fi
-            echo "Waiting for app... ($i/10)"; sleep 10
+            echo "⏳ Waiting for app... ($i/10)"; sleep 10
           done
           echo "❌ App failed health check."; exit 1
 
-      - name: Upload Deployment Logs (optional)
+      - name: Upload Deployment Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -115,7 +116,7 @@ jobs:
           body: |
             - ✅ EC2 provisioned via Terraform
             - 🚀 App deployed and configured via SSH
-            - 📦 Logs optionally uploaded to S3
+            - 📦 Logs uploaded to S3 (optional)
             - 🟢 Health check passed on port 80
           base: feature/devops-assignment-2-v2
           branch: feature/devops-assignment-3
