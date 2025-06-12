@@ -35,6 +35,13 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      - name: Import Existing AWS Resources (if present)
+        run: |
+          terraform import aws_iam_role.s3_read_role dev_s3_read_role || echo "s3_read_role already exists or not needed"
+          terraform import aws_iam_role.s3_write_role dev_s3_write_role || echo "s3_write_role already exists or not needed"
+          terraform import aws_s3_bucket.logs_bucket dev-logs-bucket-${{ env.STAGE }} || echo "logs_bucket already exists or not needed"
+          # Add more terraform import lines here as needed for VPC, Subnet, etc.
+
       - name: Terraform Plan
         run: terraform plan -var-file="dev_config.tfvars"
 

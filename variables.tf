@@ -30,7 +30,7 @@ variable "key_name" {
 
 variable "environment" {
   type    = string
-  default = "Dev"
+  default = "dev"
 }
 
 variable "project_name" {
