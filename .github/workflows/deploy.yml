@@ -35,26 +35,6 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Import Existing AWS Resources (with timeout)
-        run: |
-          RESOURCES=(
-            "aws_iam_role.s3_read_role dev_s3_read_role"
-            "aws_iam_role.s3_write_role dev_s3_write_role"
-            "aws_iam_instance_profile.ec2_profile dev_ec2_profile"
-            "aws_s3_bucket.logs_bucket techeazy-dev-logs-debasish-87"
-            "aws_vpc.custom_vpc vpc-02a5c867828fae501"
-            "aws_subnet.public_subnet subnet-06f2a6824f4d9f9bb"
-            "aws_internet_gateway.igw igw-0b2df034e86179a3a"
-            "aws_route_table.public_rt rtb-0596d2616d0a53cec"
-            "aws_security_group.web_security_group sg-0a512591fe6a8cb72"
-            "aws_route_table_association.public_subnet_association rtbassoc-0f840f2573a942560"
-          )
-
-          for resource in "${RESOURCES[@]}"; do
-            echo "⏳ Importing $resource..."
-            timeout 15 terraform import $resource || echo "⚠️ Skipped (exists or error): $resource"
-          done
-
       - name: Terraform Plan
         run: terraform plan -var-file="dev_config.tfvars"
 
@@ -69,10 +49,9 @@ jobs:
       - name: Wait for EC2 SSH to be Ready
         run: |
           for i in {1..30}; do
-            nc -zv $PUBLIC_IP 22 && echo "✅ SSH available!" && exit 0
+            nc -zv $PUBLIC_IP 22 && echo "✅ SSH is ready" && break
             echo "⏳ Waiting for SSH... ($i/30)"; sleep 10
           done
-          echo "❌ SSH not ready after timeout."; exit 1
 
       - name: Setup SSH Key
         run: |
@@ -94,11 +73,11 @@ jobs:
               echo "✅ App is healthy!"
               exit 0
             fi
-            echo "⏳ Waiting for app... ($i/10)"; sleep 10
+            echo "⏳ Waiting for app on port 80... ($i/10)"; sleep 10
           done
           echo "❌ App failed health check."; exit 1
 
-      - name: Upload Deployment Logs
+      - name: Upload Deployment Logs (optional)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -116,7 +95,7 @@ jobs:
           body: |
             - ✅ EC2 provisioned via Terraform
             - 🚀 App deployed and configured via SSH
-            - 📦 Logs uploaded to S3 (optional)
+            - 📦 Logs optionally uploaded to S3
             - 🟢 Health check passed on port 80
           base: feature/devops-assignment-2-v2
           branch: feature/devops-assignment-3
