@@ -8,6 +8,10 @@ environment        = "dev"
 
 
 logs_bucket_name = "techeazy-dev-logs-debasish-87"
+<<<<<<< feature/devops-assignment-3
+=======
+
+>>>>>>> feature/devops-assignment-2-v2
 
 project_name = "techeazy-devops"
 
