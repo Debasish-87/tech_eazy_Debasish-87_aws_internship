@@ -3,99 +3,97 @@ name: Deploy Infrastructure and App
 on:
   push:
     branches:
-      - feature/devops-assignment-3
+      - feature/devops-assignment-3   # change to `main` once merged
     tags:
-      - deploy-*
+      - deploy-*                     # e.g. deploy-dev / deploy-prod
+
+# ---------- Global environment ----------
+env:
+  AWS_REGION: ap-south-1
+  STAGE: dev                 # default; overridden from tag value
+  TF_IN_AUTOMATION: "true"   # tells Terraform it is running in CI
 
 jobs:
   deploy:
-    name: Terraform Deployment & App Setup
     runs-on: ubuntu-latest
 
-    env:
-      AWS_REGION: ap-south-1
-      STAGE: dev
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      # 1. Checkout source
+      - uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      # 2. If the workflow was triggered by a tag like `deploy-prod`,
+      #    derive STAGE from the tag name (prod, dev, etc.) and export to ENV
+      - name: Derive stage from tag
+        if: startsWith(github.ref, 'refs/tags/deploy-')
+        run: echo "STAGE=${GITHUB_REF#refs/tags/deploy-}" >> "$GITHUB_ENV"
+
+      # 3. Configure AWS credentials (stored as repo → Settings → Secrets)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      # 4. Install Terraform CLI
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.6
 
+      # 5‑A. Terraform init (non‑interactive)
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -input=false
 
+      # 5‑B. Terraform plan (read correct tfvars based on stage)
       - name: Terraform Plan
-        run: terraform plan -var-file="dev_config.tfvars"
+        run: terraform plan -input=false -no-color -var-file="${{ env.STAGE }}_config.tfvars"
 
+      # 5‑C. Terraform apply
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var-file="dev_config.tfvars"
+        run: terraform apply -input=false -auto-approve -no-color -var-file="${{ env.STAGE }}_config.tfvars"
 
-      - name: Fetch EC2 Public IP
+      # 6. Capture EC2 public IP from Terraform output
+      - name: Capture EC2 Public IP
         id: ec2
-        run: |
-          echo "PUBLIC_IP=$(terraform output -raw instance_public_ip)" >> "$GITHUB_ENV"
+        run: echo "PUBLIC_IP=$(terraform output -raw instance_public_ip)" >> "$GITHUB_ENV"
 
-      - name: Wait for EC2 SSH to be Ready
+      # 7. Wait for SSH service on the instance (max ~2½ min)
+      - name: Wait for SSH on port 22
         run: |
-          for i in {1..30}; do
-            nc -zv $PUBLIC_IP 22 && echo "✅ SSH is ready" && break
-            echo "⏳ Waiting for SSH... ($i/30)"; sleep 10
+          for i in {1..20}; do
+            if nc -z -w3 $PUBLIC_IP 22; then echo "✅ SSH ready"; exit 0; fi
+            echo "⏳ waiting for SSH… $i/20"; sleep 8;
           done
+          echo "❌ SSH timeout"; exit 1
 
-      - name: Setup SSH Key
+      # 8. Health‑check the application (user‑data already deployed it)
+      - name: Health Check (expects HTTP 200)
         run: |
-          echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
-          chmod 400 key.pem
-
-      - name: Transfer Deployment Script
-        run: |
-          scp -o StrictHostKeyChecking=no -i key.pem user_data.sh ubuntu@$PUBLIC_IP:/tmp/user_data.sh
-
-      - name: Execute Remote Deployment Script
-        run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem ubuntu@$PUBLIC_IP 'bash /tmp/user_data.sh'
-
-      - name: Health Check on Port 80
-        run: |
-          for i in {1..10}; do
-            if curl -s --head http://$PUBLIC_IP | grep "200 OK"; then
-              echo "✅ App is healthy!"
-              exit 0
-            fi
-            echo "⏳ Waiting for app on port 80... ($i/10)"; sleep 10
+          for i in {1..15}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://$PUBLIC_IP)
+            if [ "$code" = "200" ]; then echo "✅ App healthy"; exit 0; fi
+            echo "⏳ HTTP $code — retry $i/15"; sleep 10;
           done
-          echo "❌ App failed health check."; exit 1
+          echo "❌ App failed health check"; exit 1
 
-      - name: Upload Deployment Logs (optional)
+      # 9. Upload Terraform state (optional artifact for debugging)
+      - name: Upload Terraform state artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-logs
-          path: |
-            terraform.tfstate
-            /tmp/user_data.sh
+          name: terraform-state
+          path: terraform.tfstate
 
-      - name: Create Pull Request from PS-3 to PS-2
+      # 10. Create an automatic PR back into assignment‑2 branch (optional GitOps demo)
+      - name: Create Pull Request from PS‑3 to PS‑2
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Auto PR: Assignment 3 - Infra + Deployment"
-          title: "Assignment 3 - Deploy via GitHub Actions"
+          commit-message: "Auto PR: Assignment 3 – Infra + Deployment"
+          title: "Assignment 3 – Deployed via CI"
           body: |
             - ✅ EC2 provisioned via Terraform
-            - 🚀 App deployed and configured via SSH
-            - 📦 Logs optionally uploaded to S3
-            - 🟢 Health check passed on port 80
+            - 🚀 App deployed through EC2 user‑data (no extra SSH)
+            - 🟢 Health check passed on port 80
           base: feature/devops-assignment-2-v2
           branch: feature/devops-assignment-3
