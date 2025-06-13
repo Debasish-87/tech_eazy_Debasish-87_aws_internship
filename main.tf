@@ -4,8 +4,8 @@ provider "aws" {
 
 terraform {
   backend "s3" {
-    bucket = "debasish-terraform-state-bucket"
-    key    = "dev/terraform.tfstate"
+    bucket = "techeazy-dev-logs-debasish-87"
+    key    = "state/terraform.tfstate"
     region = "ap-south-1"
   }
 }
