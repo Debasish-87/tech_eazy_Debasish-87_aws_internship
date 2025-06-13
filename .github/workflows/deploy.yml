@@ -9,17 +9,17 @@ on:
 
 jobs:
   terraform:
-    name: Terraform Destroy & Apply (Clean Infra)
+    name: Clean Existing Resources & Apply Terraform
     runs-on: ubuntu-latest
 
     env:
       AWS_REGION: ap-south-1
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -31,11 +31,24 @@ jobs:
         with:
           terraform_version: 1.6.6
 
+      - name: Get AWS Account ID
+        id: account
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+
+      - name: Manual Cleanup of Conflicting Resources
+        run: |
+          aws iam delete-role-policy --role-name dev_s3_read_role --policy-name dev_s3_read_policy || true
+          aws iam delete-role-policy --role-name dev_s3_write_role --policy-name dev_s3_write_policy || true
+          aws iam delete-role --role-name dev_s3_read_role || true
+          aws iam delete-role --role-name dev_s3_write_role || true
+          aws iam delete-policy --policy-arn arn:aws:iam::${{ steps.account.outputs.account_id }}:policy/dev_s3_read_policy || true
+          aws iam delete-policy --policy-arn arn:aws:iam::${{ steps.account.outputs.account_id }}:policy/dev_s3_write_policy || true
+          aws s3 rb s3://techeazy-dev-logs-debasish-87 --force || true
+
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Destroy (Clean Old Infra)
-        run: terraform destroy -auto-approve -var-file="dev_config.tfvars" || echo "Nothing to destroy or already destroyed."
-
-      - name: Terraform Apply (Fresh Infra)
+      - name: Terraform Apply
         run: terraform apply -auto-approve -var-file="dev_config.tfvars"
