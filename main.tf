@@ -2,13 +2,13 @@ provider "aws" {
   region = var.aws_region
 }
 
-terraform {
-  backend "s3" {
-    bucket = "techeazy-dev-logs-debasish-87"
-    key    = "state/terraform.tfstate"
-    region = "ap-south-1"
-  }
-}
+# terraform {
+#   backend "s3" {
+#     bucket = "techeazy-dev-logs-debasish-87"
+#     key    = "terraform.tfstate"
+#     region = "ap-south-1"
+#   }
+# }
 
 
 resource "aws_vpc" "custom_vpc" {

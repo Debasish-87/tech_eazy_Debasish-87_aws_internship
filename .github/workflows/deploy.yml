@@ -31,24 +31,39 @@ jobs:
         with:
           terraform_version: 1.6.6
 
-      - name: Get AWS Account ID
-        id: account
-        run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
-          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
-
-      - name: Manual Cleanup of Conflicting Resources
-        run: |
-          aws iam delete-role-policy --role-name dev_s3_read_role --policy-name dev_s3_read_policy || true
-          aws iam delete-role-policy --role-name dev_s3_write_role --policy-name dev_s3_write_policy || true
-          aws iam delete-role --role-name dev_s3_read_role || true
-          aws iam delete-role --role-name dev_s3_write_role || true
-          aws iam delete-policy --policy-arn arn:aws:iam::${{ steps.account.outputs.account_id }}:policy/dev_s3_read_policy || true
-          aws iam delete-policy --policy-arn arn:aws:iam::${{ steps.account.outputs.account_id }}:policy/dev_s3_write_policy || true
-          aws s3 rb s3://techeazy-dev-logs-debasish-87 --force || true
-
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -reconfigure
+
+      - name: Import Existing Resources If Needed
+        run: |
+          set -e
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+
+          # Check and import IAM Roles
+          if aws iam get-role --role-name dev_s3_read_role 2>/dev/null; then
+            terraform import aws_iam_role.s3_read_role dev_s3_read_role
+          fi
+
+          if aws iam get-role --role-name dev_s3_write_role 2>/dev/null; then
+            terraform import aws_iam_role.s3_write_role dev_s3_write_role
+          fi
+
+          # Check and import IAM Policies
+          if aws iam list-policies --scope Local | grep -q dev_s3_read_policy; then
+            terraform import aws_iam_policy.s3_read_policy arn:aws:iam::$ACCOUNT_ID:policy/dev_s3_read_policy
+          fi
+
+          if aws iam list-policies --scope Local | grep -q dev_s3_write_policy; then
+            terraform import aws_iam_policy.s3_write_policy arn:aws:iam::$ACCOUNT_ID:policy/dev_s3_write_policy
+          fi
+
+          # Check and import S3 bucket
+          if aws s3api head-bucket --bucket techeazy-dev-logs-debasish-87 2>/dev/null; then
+            terraform import aws_s3_bucket.logs_bucket techeazy-dev-logs-debasish-87
+          fi
+
+      - name: Terraform Plan
+        run: terraform plan -var-file="dev_config.tfvars"
 
       - name: Terraform Apply
         run: terraform apply -auto-approve -var-file="dev_config.tfvars"
