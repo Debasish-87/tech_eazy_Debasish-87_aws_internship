@@ -15,3 +15,5 @@ output "instance_id" {
 }
 
 
+
+output "instance_dns" { value = aws_instance.app.public_dns }
