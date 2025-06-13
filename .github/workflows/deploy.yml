@@ -46,20 +46,21 @@ jobs:
         id: instance
         run: |
           echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
+          echo "EC2 IP is: $INSTANCE_IP"
 
       - name: ⏳ Wait for EC2 to Start (Retry-based)
         run: |
           echo "Waiting for EC2 instance to become reachable..."
           for i in {1..15}; do
             if nc -zv $INSTANCE_IP 22 2>/dev/null; then
-              echo "EC2 is up!"
+              echo "✅ EC2 is up and reachable via SSH!"
               exit 0
             else
-              echo "Retrying SSH (attempt $i)..."
+              echo "⏳ Retrying SSH (attempt $i)..."
               sleep 10
             fi
           done
-          echo "EC2 instance not reachable on port 22"
+          echo "❌ EC2 instance not reachable on port 22"
           exit 1
 
       - name: 🔐 SSH into EC2 and Show App Logs
@@ -67,10 +68,11 @@ jobs:
         with:
           host: ${{ env.INSTANCE_IP }}
           username: ubuntu
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          key: ${{ secrets.EC2_SSH_KEY }}  # ✅ Corrected
+          port: 22
           script: |
-            echo "Recent Application Log:"
-            sudo tail -n 30 /home/ubuntu/techeazy-devops/app.log || echo "Log file not found!"
+            echo "✅ Connected to EC2. Showing recent app logs:"
+            sudo tail -n 30 /home/ubuntu/techeazy-devops/app.log || echo "⚠️ Log file not found!"
 
       - name: 🔍 Validate Application on Port 80
         run: |
@@ -80,7 +82,7 @@ jobs:
               echo "✅ App is healthy and serving on port 80"
               exit 0
             else
-              echo "Waiting for app to be ready (attempt $i)..."
+              echo "⏳ Waiting for app to be ready (attempt $i)..."
               sleep 10
             fi
           done
