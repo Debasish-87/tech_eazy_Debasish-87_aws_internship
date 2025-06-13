@@ -56,15 +56,15 @@ jobs:
       - name: 🌐 Validate App on Port 80
         run: |
           echo "🌐 Validating app at http://${INSTANCE_IP} ..."
-          for i in {1..30}; do
+          for i in {1..40}; do  # 🔁 40 attempts
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
               echo "✅ App is healthy and returned HTTP 200 on attempt $i"
               exit 0
             else
-              echo "⏳ Attempt $i: App not ready, got HTTP $STATUS"
-              sleep 10
+              echo "⏳ Attempt $i: App not ready yet, got HTTP $STATUS"
+              sleep 15  # 💤 wait 15 seconds per try
             fi
           done
-          echo "❌ App failed health check after 30 attempts (5 minutes total)"
+          echo "❌ App failed health check after 40 attempts (~10 mins)"
           exit 1
