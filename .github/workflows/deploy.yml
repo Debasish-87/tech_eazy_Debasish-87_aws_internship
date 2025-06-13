@@ -21,63 +21,60 @@ jobs:
       IAM_WRITE_POLICY: dev_s3_write_policy
 
     steps:
-      - name: Checkout Repository
+      - name: 📦 Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: 🔐 Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
+      - name: 🛠️ Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.6
 
-      - name: Terraform Init
+      - name: ⚙️ Terraform Init
         run: terraform init -reconfigure
 
-      - name: Import Existing Resources (Only If Already Exists)
-        id: import
+      - name: ⚡ Fast Import Existing AWS Resources (if any)
         run: |
           set -e
-          echo "🔍 Fetching AWS Account ID..."
+          echo "🔍 Getting AWS Account ID..."
           ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 
-          echo "🔁 Importing existing resources (if any)..."
+          echo "🔁 Collecting import commands..."
+          IMPORT_CMDS=()
 
           # IAM Roles
-          if aws iam get-role --role-name "$IAM_READ_ROLE" >/dev/null 2>&1; then
-            echo "✅ Importing IAM Role: $IAM_READ_ROLE"
-            terraform import aws_iam_role.s3_read_role "$IAM_READ_ROLE" || true
-          fi
+          aws iam get-role --role-name "$IAM_READ_ROLE" >/dev/null 2>&1 && \
+            IMPORT_CMDS+=("terraform import aws_iam_role.s3_read_role $IAM_READ_ROLE")
 
-          if aws iam get-role --role-name "$IAM_WRITE_ROLE" >/dev/null 2>&1; then
-            echo "✅ Importing IAM Role: $IAM_WRITE_ROLE"
-            terraform import aws_iam_role.s3_write_role "$IAM_WRITE_ROLE" || true
-          fi
+          aws iam get-role --role-name "$IAM_WRITE_ROLE" >/dev/null 2>&1 && \
+            IMPORT_CMDS+=("terraform import aws_iam_role.s3_write_role $IAM_WRITE_ROLE")
 
           # IAM Policies
-          if aws iam list-policies --scope Local --query "Policies[*].PolicyName" --output text | grep -q "$IAM_READ_POLICY"; then
-            echo "✅ Importing IAM Policy: $IAM_READ_POLICY"
-            terraform import aws_iam_policy.s3_read_policy "arn:aws:iam::$ACCOUNT_ID:policy/$IAM_READ_POLICY" || true
-          fi
+          aws iam list-policies --scope Local --query "Policies[*].PolicyName" --output text | grep -q "$IAM_READ_POLICY" && \
+            IMPORT_CMDS+=("terraform import aws_iam_policy.s3_read_policy arn:aws:iam::$ACCOUNT_ID:policy/$IAM_READ_POLICY")
 
-          if aws iam list-policies --scope Local --query "Policies[*].PolicyName" --output text | grep -q "$IAM_WRITE_POLICY"; then
-            echo "✅ Importing IAM Policy: $IAM_WRITE_POLICY"
-            terraform import aws_iam_policy.s3_write_policy "arn:aws:iam::$ACCOUNT_ID:policy/$IAM_WRITE_POLICY" || true
-          fi
+          aws iam list-policies --scope Local --query "Policies[*].PolicyName" --output text | grep -q "$IAM_WRITE_POLICY" && \
+            IMPORT_CMDS+=("terraform import aws_iam_policy.s3_write_policy arn:aws:iam::$ACCOUNT_ID:policy/$IAM_WRITE_POLICY")
 
           # S3 Bucket
-          if aws s3api head-bucket --bucket "$LOGS_BUCKET_NAME" 2>/dev/null; then
-            echo "✅ Importing S3 Bucket: $LOGS_BUCKET_NAME"
-            terraform import aws_s3_bucket.logs_bucket "$LOGS_BUCKET_NAME" || true
-          fi
+          aws s3api head-bucket --bucket "$LOGS_BUCKET_NAME" >/dev/null 2>&1 && \
+            IMPORT_CMDS+=("terraform import aws_s3_bucket.logs_bucket $LOGS_BUCKET_NAME")
 
-      - name: Terraform Plan
+          echo "🧾 Found ${#IMPORT_CMDS[@]} resources to import."
+
+          for cmd in "${IMPORT_CMDS[@]}"; do
+            echo "⚡ Running: $cmd"
+            eval $cmd || true
+          done
+
+      - name: 🔍 Terraform Plan
         run: terraform plan -var-file="dev_config.tfvars"
 
-      - name: Terraform Apply
+      - name: 🚀 Terraform Apply
         run: terraform apply -auto-approve -var-file="dev_config.tfvars"
