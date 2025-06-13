@@ -30,7 +30,12 @@ resource "aws_iam_role_policy_attachment" "attach_write" {
 
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.environment}_ec2_profile"
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [role]
+  }
+
   role = aws_iam_role.s3_write_role.name
 }
-
 
