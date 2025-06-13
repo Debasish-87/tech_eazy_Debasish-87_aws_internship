@@ -3,7 +3,7 @@ name: 🚀 Deploy Java App to EC2
 on:
   push:
     branches:
-      - feature/devops-assignment-2-v3
+      - feature/devops-assignment-3
     tags:
       - 'v*'
 

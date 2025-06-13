@@ -14,7 +14,6 @@ apt-get upgrade -y
 sudo apt install unzip
 apt install -y openjdk-21-jdk maven git lsof
 
-
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
 apt-get install -y unzip curl
 unzip /tmp/awscliv2.zip -d /tmp
@@ -65,6 +64,10 @@ BUCKET_NAME="${logs_bucket_name}"
 DATE=$(date +%F-%T)
 aws s3 cp /var/log/startup.log s3://$BUCKET_NAME/ec2_logs/startup-$DATE.log || true
 aws s3 cp /home/ubuntu/techeazy-devops/app.log s3://$BUCKET_NAME/app/logs/app-$DATE.log || true
+
+# ✅ Signal GitHub Action that app is ready
+echo "Application is up and running" > /tmp/app_ready.txt
+aws s3 cp /tmp/app_ready.txt s3://$BUCKET_NAME/status/app_ready.txt || true
 
 # Schedule shutdown
 shutdown -h +30
