@@ -3,7 +3,7 @@ name: Deploy Java App to EC2
 on:
   push:
     branches:
-      - feature/devops-assignment-3  
+      - feature/devops-assignment-3
     tags:
       - 'v*'
 
@@ -43,60 +43,22 @@ jobs:
         run: terraform apply -auto-approve -var-file="dev_config.tfvars"
 
       - name: 🌐 Get EC2 Public IP
-        id: get_ip
+        id: instance
         run: |
-          INSTANCE_IP=$(terraform output -raw instance_public_ip)
-          echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_ENV
-          echo "EC2 IP is: $INSTANCE_IP"
+          echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
+          echo "EC2 Public IP: $INSTANCE_IP"
 
-      - name: ⏳ Wait for EC2 to Start (SSH readiness)
-        run: |
-          echo "Waiting for EC2 instance to become reachable..."
-          for i in {1..15}; do
-            if nc -zv $INSTANCE_IP 22 2>/dev/null; then
-              echo "✅ EC2 is up and reachable via SSH!"
-              exit 0
-            else
-              echo "⏳ Retrying SSH (attempt $i)..."
-              sleep 10
-            fi
-          done
-          echo "❌ EC2 instance not reachable on port 22"
-          exit 1
-
-      - name: 🐧 SSH into EC2 and Show App Logs
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ env.INSTANCE_IP }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: |
-            echo "✅ Connected to EC2. Checking app directory and logs..."
-            if [ -d "/home/ubuntu/techeazy-devops" ]; then
-              ls -lah /home/ubuntu/techeazy-devops
-              if [ -f "/home/ubuntu/techeazy-devops/app.log" ]; then
-                echo "📄 Showing app.log:"
-                tail -n 30 /home/ubuntu/techeazy-devops/app.log
-              else
-                echo "⚠️ app.log not found!"
-              fi
-            else
-              echo "❌ /home/ubuntu/techeazy-devops not found. App might not have cloned/deployed properly."
-            fi
-
-      - name: 🔍 Validate Application on Port 80
+      - name: 🌐 Validate App on Port 80
         run: |
           echo "🌐 Validating app at http://${INSTANCE_IP} ..."
           for i in {1..10}; do
-            status=$(curl -s -o /dev/null -w "%{http_code}" http://${INSTANCE_IP})
-            echo "Attempt $i: HTTP status = $status"
-            if [ "$status" == "200" ]; then
-              echo "✅ App is healthy and serving traffic!"
+            if curl -s --fail http://${INSTANCE_IP}; then
+              echo "✅ App is running and reachable on port 80"
               exit 0
+            else
+              echo "⏳ Waiting for app to be ready (attempt $i)..."
+              sleep 10
             fi
-            echo "⏳ Waiting 10 seconds before retry..."
-            sleep 10
           done
-          echo "❌ App failed health check on port 80"
+          echo "❌ App is not responding on port 80"
           exit 1
