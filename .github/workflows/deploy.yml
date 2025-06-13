@@ -48,18 +48,23 @@ jobs:
           echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
           echo "EC2 Public IP: $INSTANCE_IP"
 
+      - name: ⏳ Wait for instance and app to be ready
+        run: |
+          echo "⏳ Sleeping 60 seconds to allow EC2 and Spring Boot app to fully start..."
+          sleep 60
+
       - name: 🌐 Validate App on Port 80
         run: |
           echo "🌐 Validating app at http://${INSTANCE_IP} ..."
-          for i in {1..20}; do
-            STATUS=$(curl -o /dev/null -s -w "%{http_code}\n" http://${INSTANCE_IP})
+          for i in {1..30}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo "✅ App is healthy and returned HTTP 200 OK"
+              echo "✅ App is healthy and returned HTTP 200 on attempt $i"
               exit 0
             else
-              echo "⏳ Waiting for app... (attempt $i), got status: $STATUS"
+              echo "⏳ Attempt $i: App not ready, got HTTP $STATUS"
               sleep 10
             fi
           done
-          echo "❌ App failed health check after 20 attempts"
+          echo "❌ App failed health check after 30 attempts (5 minutes total)"
           exit 1
