@@ -9,7 +9,7 @@ on:
 
 jobs:
   terraform:
-    name: Terraform Init, Plan & Apply
+    name: Terraform Destroy & Apply (Clean Infra)
     runs-on: ubuntu-latest
 
     env:
@@ -34,8 +34,8 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan
-        run: terraform plan -var-file="dev_config.tfvars"
+      - name: Terraform Destroy (Clean Old Infra)
+        run: terraform destroy -auto-approve -var-file="dev_config.tfvars" || echo "Nothing to destroy or already destroyed."
 
-      - name: Terraform Apply
+      - name: Terraform Apply (Fresh Infra)
         run: terraform apply -auto-approve -var-file="dev_config.tfvars"
