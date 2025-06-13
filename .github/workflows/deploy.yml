@@ -51,14 +51,15 @@ jobs:
       - name: 🌐 Validate App on Port 80
         run: |
           echo "🌐 Validating app at http://${INSTANCE_IP} ..."
-          for i in {1..10}; do
-            if curl -s --fail http://${INSTANCE_IP}; then
-              echo "✅ App is running and reachable on port 80"
+          for i in {1..20}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}\n" http://${INSTANCE_IP})
+            if [[ "$STATUS" == "200" ]]; then
+              echo "✅ App is healthy and returned HTTP 200 OK"
               exit 0
             else
-              echo "⏳ Waiting for app to be ready (attempt $i)..."
+              echo "⏳ Waiting for app... (attempt $i), got status: $STATUS"
               sleep 10
             fi
           done
-          echo "❌ App is not responding on port 80"
+          echo "❌ App failed health check after 20 attempts"
           exit 1
