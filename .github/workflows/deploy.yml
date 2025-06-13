@@ -5,7 +5,7 @@ on:
     branches:
       - feature/devops-assignment-3  
     tags:
-      - deploy-dev
+      - 'v*'
 
 jobs:
   deploy:
