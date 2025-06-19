@@ -141,8 +141,6 @@ terraform destroy -var-file="dev_config.tfvars"
 tech_eazy_<your-github-username>_aws_internship
 ```
 
-✅ Example: `tech_eazy_Debasish-87_aws_internship`
-
 2. Submit the GitHub URL here:
    👉 [https://forms.gle/9DfAcyCHsTiQ8qaW7](https://forms.gle/9DfAcyCHsTiQ8qaW7)
 
