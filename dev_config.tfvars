@@ -9,5 +9,6 @@ environment        = "dev"
 
 logs_bucket_name = "techeazy-dev-logs-debasish-87"
 
+
 project_name = "techeazy-devops"
 

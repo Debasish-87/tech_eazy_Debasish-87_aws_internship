@@ -84,11 +84,14 @@ resource "aws_security_group" "web_security_group" {
 resource "aws_instance" "app" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
   key_name                    = var.key_name
   subnet_id                   = aws_subnet.public_subnet.id
   vpc_security_group_ids      = [aws_security_group.web_security_group.id]
   associate_public_ip_address = true
-  user_data                   = file("${path.module}/user_data.sh")
+  user_data = templatefile("${path.module}/user_data.sh", {
+    logs_bucket_name = var.logs_bucket_name
+  })
 
   tags = {
     Name = "${var.environment}-app-instance"
