@@ -3,7 +3,6 @@ exec > /var/log/startup.log 2>&1
 set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-# Wait for the 'ubuntu' user directory to be ready
 while [ ! -d "/home/ubuntu" ]; do
   echo "Waiting for /home/ubuntu to be created..."
   sleep 2
@@ -22,7 +21,6 @@ sudo /tmp/aws/install
 export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
 export PATH=$JAVA_HOME/bin:$PATH
 
-# Clone the repo as ubuntu user
 sudo -u ubuntu bash <<EOF
 cd /home/ubuntu
 if [ ! -d "techeazy-devops" ]; then
@@ -35,11 +33,9 @@ export HOME=/home/ubuntu
 JAVA_PATH=$(readlink -f "$(which java)")
 EOF
 
-# Set capability outside sudo block
 JAVA_PATH=$(readlink -f "$(which java)")
 setcap 'cap_net_bind_service=+ep' "$JAVA_PATH"
 
-# Modify app properties and run app as ubuntu
 sudo -u ubuntu bash <<EOF
 cd /home/ubuntu/techeazy-devops
 mkdir -p src/main/resources
@@ -55,19 +51,15 @@ touch app.log
 nohup ./mvnw spring-boot:run > app.log 2>&1 &
 EOF
 
-# Set ownership
 chown -R ubuntu:ubuntu /home/ubuntu/techeazy-devops
 chown ubuntu:ubuntu /home/ubuntu/techeazy-devops/app.log
 
-# Upload logs to S3
 BUCKET_NAME="${logs_bucket_name}" 
 DATE=$(date +%F-%T)
 aws s3 cp /var/log/startup.log s3://$BUCKET_NAME/ec2_logs/startup-$DATE.log || true
 aws s3 cp /home/ubuntu/techeazy-devops/app.log s3://$BUCKET_NAME/app/logs/app-$DATE.log || true
 
-# Signal GitHub Action that app is ready
 echo "Application is up and running" > /tmp/app_ready.txt
 aws s3 cp /tmp/app_ready.txt s3://$BUCKET_NAME/status/app_ready.txt || true
 
-# Schedule shutdown
 shutdown -h +30

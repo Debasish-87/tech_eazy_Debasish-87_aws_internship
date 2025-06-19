@@ -1,185 +1,144 @@
-# 🚀 DevOps Assignment – Automate EC2 Deployment on AWS
+# DevOps Assignment – Automate EC2 Deployment on AWS
 
-This project demonstrates infrastructure automation using **Terraform** to deploy a **Java 19/21 Spring Boot** application on an **AWS EC2** instance. The setup ensures modularity, environment-specific configurations, secure AWS credential handling, and cost-optimized resource usage.
-
----
-
-## 📌 Project Objective
-
-Automate the following tasks end-to-end using Infrastructure as Code:
-
-1. Spin up an EC2 instance in a custom VPC.
-2. Install required dependencies (Java 19).
-3. Clone a remote GitHub repo and deploy the application.
-4. Ensure the app is reachable via port 80.
-5. Auto-shutdown the instance after a configured time.
-6. Use environment-specific configurations (e.g., `Dev`, `Prod`).
-7. Avoid hardcoding sensitive credentials.
-8. Provide API testing artifacts (Postman collection).
+This project automates the deployment of a Java Spring Boot application on an AWS EC2 instance using Terraform. It sets up the infrastructure, installs Java, deploys the app, and shuts down the instance automatically after some time.
 
 ---
 
-## 🧾 Tech Stack
+## Objective
 
-| Tool/Service    | Purpose                          |
-|------------------|----------------------------------|
-| **Terraform**    | Infrastructure automation        |
-| **AWS EC2**      | Compute resource (server)        |
-| **Shell Script** | EC2 bootstrap / app deployment   |
-| **GitHub**       | Source control & app repo        |
-| **Postman**      | API testing                      |
+This project does the following:
+
+1. Creates an EC2 instance inside a custom VPC
+2. Installs Java 19 on the instance
+3. Clones a GitHub Spring Boot app and starts it
+4. Makes the app available on port 80
+5. Shuts down the EC2 instance after a set time
+6. Uses separate configuration files for Dev and Prod
+7. Keeps AWS credentials safe using environment variables
+8. Includes a Postman file for testing the app
 
 ---
 
-## 🗂️ Project Structure
+## Tools Used
 
-```plaintext
+* Terraform for automation
+* AWS EC2 to run the app
+* Shell script for setup and deployment
+* GitHub for the app source code
+* Postman for testing the APIs
+
+---
+
+## Project Structure
+
+```
 tech_eazy_Debasish-87_aws_devops/
-├── main.tf                  # Core infrastructure definitions
+├── main.tf                  # Terraform infrastructure setup
 ├── variables.tf             # Input variables
-├── outputs.tf               # Output values (e.g., IP, instance ID)
-├── user_data.sh             # EC2 bootstrapping script
-├── dev_config.tfvars        # Config for Dev environment
-├── terraform.tfstate        # Terraform state file
-├── terraform.tfstate.backup
+├── outputs.tf               # Outputs like EC2 IP
+├── user_data.sh             # EC2 startup script
+├── dev_config.tfvars        # Dev environment configuration
 ├── resources/
-│   └── postman_collection.json
-└── README.md                # This documentation
-````
-
----
-
-## 🔧 Configuration Files
-
-### `dev_config.tfvars`
-
-```hcl
-instance_type     = "t2.micro"
-stage             = "dev"
-app_repo_url      = "https://github.com/techeazy-consulting/techeazy-devops"
-shutdown_minutes  = 30
+│   └── postman_collection.json  # Postman API test file
+└── README.md                # Project documentation
 ```
 
-🔄 **Create `prod_config.tfvars` similarly** to manage Prod stage values.
-
 ---
 
-## ⚙️ Deployment Workflow
+## How to Use
 
-### 1️⃣ Clone the Repo
+### Step 1: Clone the Repository
 
-```bash
+```
 git clone https://github.com/Debasish-87/tech_eazy_Debasish-87_aws_devops.git
 cd tech_eazy_Debasish-87_aws_devops
 ```
 
-### 2️⃣ Set Up AWS Credentials (Environment-Based)
+### Step 2: Set AWS Credentials
 
-Ensure AWS credentials are **exported as environment variables**:
+Export your AWS credentials using environment variables:
 
-```bash
+```
 export AWS_ACCESS_KEY_ID=your-access-key
 export AWS_SECRET_ACCESS_KEY=your-secret-key
 ```
 
-### 3️⃣ Initialize Terraform
+### Step 3: Initialize Terraform
 
-```bash
+```
 terraform init
 ```
 
-### 4️⃣ Apply Terraform Configuration
+### Step 4: Apply Configuration
 
-Run with environment config (e.g., Dev):
+Run this command for the Dev environment:
 
-```bash
+```
 terraform apply -var-file="dev_config.tfvars"
 ```
 
-This will:
+Terraform will:
 
-* Create a VPC, Subnet, Internet Gateway, Security Group
+* Create VPC, subnet, and security group
 * Launch an EC2 instance
-* Execute `user_data.sh` to:
+* Install Java 19
+* Clone and start the Spring Boot app
+* Schedule automatic shutdown
 
-  * Install Java 19/21
-  * Clone the GitHub repo
-  * Start the app on port 80
-  * Schedule automatic shutdown after `shutdown_minutes`
+### Step 5: Access the Application
 
----
-
-## 📡 Accessing the Application
-
-After deployment, visit:
+After deployment, open the app in your browser using the public IP:
 
 ```
 http://<instance_public_ip>
 ```
 
-💡 Public IP is shown in Terraform output as `instance_public_ip`.
+You will see the public IP in the Terraform output.
 
 ---
 
-## 🧪 API Testing with Postman
+## API Testing
 
-Use the provided collection in:
+Open the following Postman collection file to test the app:
 
 ```
-resources/techeazy-app.postman_collection.json
+resources/postman_collection.json
 ```
 
-Import it into Postman to test the backend APIs once the app is running.
+Import it into Postman and send requests to the application.
 
 ---
 
-## 🛑 Destroy Resources (Cleanup)
+## Cleanup
 
-To avoid charges on AWS:
+To delete everything and avoid AWS charges:
 
-```bash
+```
 terraform destroy -var-file="dev_config.tfvars"
 ```
 
 ---
 
-## 💡 Key Highlights
+## Submission Instructions
 
-* ✅ Modular and reusable Terraform code
-* ✅ Stage-aware configurations using `.tfvars`
-* ✅ No secrets or keys hardcoded
-* ✅ App runs on port 80 (as required)
-* ✅ Auto-shutdown to save AWS cost
-* ✅ Postman collection included for API validation
-
----
-
-## 📫 Submission Instructions
-
-1. Push your code to a **public GitHub repository** with the naming convention:
+1. Push the project to a public GitHub repo named:
 
 ```
 tech_eazy_<your-github-username>_aws_internship
 ```
 
-✅ Your repo: `tech_eazy_Debasish-87_aws_internship`
+Example: `tech_eazy_Debasish-87_aws_internship`
 
-2. Submit the GitHub repo URL in this form:
-   👉 [https://forms.gle/9DfAcyCHsTiQ8qaW7](https://forms.gle/9DfAcyCHsTiQ8qaW7)
+2. Submit the GitHub repo URL in the form:
 
----
-
-## 👨‍💻 Author
-
-**Debasish Mohanty**
-Cloud DevSecOps Enthusiast | Terraform | AWS | CI/CD
-GitHub: [Debasish-87](https://github.com/Debasish-87)
+[https://forms.gle/9DfAcyCHsTiQ8qaW7](https://forms.gle/9DfAcyCHsTiQ8qaW7)
 
 ---
 
-```
+## Author
+
+Debasish Mohanty
+Cloud DevSecOps | Terraform | AWS | CI/CD
+GitHub: [https://github.com/Debasish-87](https://github.com/Debasish-87)
 
 ---
-
-Let me know if you'd like a badge section, GitHub Actions CI setup, or if you're planning to convert this into a full CI/CD pipeline project.
-```
