@@ -142,7 +142,7 @@ tech_eazy_<your-github-username>_aws_internship
 ```
 
 2. Submit the GitHub URL here:
-   👉 [https://forms.gle/9DfAcyCHsTiQ8qaW7](https://forms.gle/9DfAcyCHsTiQ8qaW7)
+    [https://forms.gle/9DfAcyCHsTiQ8qaW7](https://forms.gle/9DfAcyCHsTiQ8qaW7)
 
 ---
 
