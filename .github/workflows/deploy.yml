@@ -54,10 +54,10 @@ jobs:
         run: |
           for i in {1..30}; do
             if aws s3 ls s3://techeazy-logs-debasish-87/status/dev/app_ready.txt >/dev/null 2>&1; then
-              echo "Signal received on attempt $i"
+              echo " Signal received on attempt $i"
               break
             else
-              echo "Waiting for app_ready.txt... attempt $i"
+              echo " Waiting for app_ready.txt... attempt $i"
               sleep 10
             fi
           done
@@ -67,14 +67,14 @@ jobs:
           for i in {1..30}; do
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo "App is healthy (HTTP 200)"
+              echo " App is healthy (HTTP 200)"
               exit 0
             else
-              echo "Waiting for app to become healthy... attempt $i"
+              echo " Waiting for app to become healthy... attempt $i"
               sleep 10
             fi
           done
-          echo "App health check failed"
+          echo " App health check failed"
           exit 1
 
   deploy-prod:
@@ -100,7 +100,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Inject GitHub PAT into prod_config.tfvars
-        run: echo 'github_pat = "${{ secrets.GITHUB_PAT }}"' >> prod_config.tfvars
+        run: echo 'github_pat = "${{ secrets.PRIVATE_REPO_PAT }}"' >> prod_config.tfvars
 
       - name: Terraform Init
         run: |
@@ -124,10 +124,10 @@ jobs:
         run: |
           for i in {1..30}; do
             if aws s3 ls s3://techeazy-logs-debasish-87/status/prod/app_ready.txt >/dev/null 2>&1; then
-              echo "Signal received on attempt $i"
+              echo " Signal received on attempt $i"
               break
             else
-              echo "Waiting for app_ready.txt... attempt $i"
+              echo " Waiting for app_ready.txt... attempt $i"
               sleep 10
             fi
           done
@@ -137,12 +137,12 @@ jobs:
           for i in {1..30}; do
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo "App is healthy (HTTP 200)"
+              echo " App is healthy (HTTP 200)"
               exit 0
             else
-              echo "Waiting for app to become healthy... attempt $i"
+              echo " Waiting for app to become healthy... attempt $i"
               sleep 10
             fi
           done
-          echo "App health check failed"
+          echo " App health check failed"
           exit 1
