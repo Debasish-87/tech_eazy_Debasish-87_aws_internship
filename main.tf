@@ -141,7 +141,7 @@ resource "aws_instance" "app" {
     BUCKET_NAME = var.logs_bucket_name
     ENVIRONMENT = local.environment
     DATE        = timestamp()
-    GITHUB_PAT  = var.github_pat
+    GITHUB_PAT  = local.environment == "prod" ? var.github_pat : ""  # ✅ This is the key fix
   })
 
   tags = {
@@ -150,6 +150,7 @@ resource "aws_instance" "app" {
     Project     = var.project_name
   }
 }
+
 
 ################### Prod Log Trigger ###################
 resource "null_resource" "prod_log_trigger" {
