@@ -8,7 +8,7 @@ export DEBIAN_FRONTEND=noninteractive
 BUCKET_NAME="${BUCKET_NAME}"
 ENVIRONMENT="${ENVIRONMENT}"
 DATE="${DATE}"
-GITHUB_PAT="${GITHUB_PAT:-}"  # optional for prod
+GITHUB_PAT="$${GITHUB_PAT}"  # optional for prod
 
 echo "[DEBUG] BUCKET_NAME=$BUCKET_NAME"
 echo "[DEBUG] ENVIRONMENT=$ENVIRONMENT"
