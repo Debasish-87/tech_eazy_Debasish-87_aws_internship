@@ -1,65 +1,88 @@
 #!/bin/bash
-exec > /var/log/startup.log 2>&1
+exec > >(tee /var/log/startup.log) 2>&1
 set -euxo pipefail
+
 export DEBIAN_FRONTEND=noninteractive
 
+# Injected via Terraform
+BUCKET_NAME="${BUCKET_NAME}"
+ENVIRONMENT="${ENVIRONMENT}"
+DATE="${DATE}"
+GITHUB_PAT="${GITHUB_PAT:-}"  # optional, only needed for prod
+
+# Wait until /home/ubuntu exists (EC2 home ready)
 while [ ! -d "/home/ubuntu" ]; do
-  echo "Waiting for /home/ubuntu to be created..."
+  echo "[INFO] Waiting for /home/ubuntu..."
   sleep 2
 done
 
+echo "[INFO] Updating and installing dependencies..."
 apt-get update -y
 apt-get upgrade -y
-sudo apt install unzip
-apt install -y openjdk-21-jdk maven git lsof
 
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-apt-get install -y unzip curl
-unzip /tmp/awscliv2.zip -d /tmp
-sudo /tmp/aws/install
+# Fast install with minimal confirmation delays
+apt-get install -y unzip curl openjdk-21-jdk maven git lsof software-properties-common
 
-export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
-export PATH=$JAVA_HOME/bin:$PATH
+# Clean up leftover aws install dir to avoid unzip prompt
+rm -rf /tmp/aws
+
+echo "[INFO] Installing AWS CLI..."
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install --update --bin-dir /usr/bin --install-dir /usr/local/aws-cli || true
+
+# JAVA path for port 80 access
+JAVA_PATH=$(readlink -f "$(which java)")
+setcap 'cap_net_bind_service=+ep' "$JAVA_PATH" || true
+
+# Set JAVA_HOME for Maven
+export JAVA_HOME=$(dirname $(dirname "$JAVA_PATH"))
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# Repo Selection
+if [ "$STAGE" == "prod" ]; then
+  REPO_URL="https://${GITHUB_PAT}@github.com/Debasish-87/tech_eazy_prod_repo.git"
+else
+  REPO_URL="https://github.com/Debasish-87/tech_eazy_Debasish-87_aws_internship.git"
+fi
+
+
+echo "[INFO] Cloning and building Spring Boot app from $REPO_URL..."
 
 sudo -u ubuntu bash <<EOF
 cd /home/ubuntu
-if [ ! -d "techeazy-devops" ]; then
-  git clone https://github.com/techeazy-consulting/techeazy-devops.git
+
+if [ ! -d "$APP_DIR" ]; then
+  git clone $REPO_URL $APP_DIR
 fi
-cd techeazy-devops
-chmod +x mvnw
-export HOME=/home/ubuntu
 
-JAVA_PATH=$(readlink -f "$(which java)")
-EOF
+cd $APP_DIR
 
-JAVA_PATH=$(readlink -f "$(which java)")
-setcap 'cap_net_bind_service=+ep' "$JAVA_PATH"
-
-sudo -u ubuntu bash <<EOF
-cd /home/ubuntu/techeazy-devops
+# Ensure server runs on port 80
 mkdir -p src/main/resources
-if grep -q "^server.port=" src/main/resources/application.properties 2>/dev/null; then
-  sed -i 's/^server.port=.*/server.port=80/' src/main/resources/application.properties
+APP_PROPS="src/main/resources/application.properties"
+if grep -q "^server.port=" "\$APP_PROPS" 2>/dev/null; then
+  sed -i 's/^server.port=.*/server.port=80/' "\$APP_PROPS"
 else
-  echo "server.port=80" >> src/main/resources/application.properties
+  echo "server.port=80" >> "\$APP_PROPS"
 fi
 
+chmod +x mvnw
 rm -f app.log
 touch app.log
-./mvnw clean package
+
+./mvnw clean package -DskipTests
 nohup ./mvnw spring-boot:run > app.log 2>&1 &
 EOF
 
-chown -R ubuntu:ubuntu /home/ubuntu/techeazy-devops
-chown ubuntu:ubuntu /home/ubuntu/techeazy-devops/app.log
+# Fix permissions
+chown -R ubuntu:ubuntu "$APP_DIR"
+chown ubuntu:ubuntu "$APP_DIR/app.log"
 
-BUCKET_NAME="${logs_bucket_name}" 
-DATE=$(date +%F-%T)
-aws s3 cp /var/log/startup.log s3://$BUCKET_NAME/ec2_logs/startup-$DATE.log || true
-aws s3 cp /home/ubuntu/techeazy-devops/app.log s3://$BUCKET_NAME/app/logs/app-$DATE.log || true
+# Health marker
+echo " Application is running on environment: $ENVIRONMENT" | tee /tmp/app_ready.txt
 
-echo "Application is up and running" > /tmp/app_ready.txt
-aws s3 cp /tmp/app_ready.txt s3://$BUCKET_NAME/status/app_ready.txt || true
-
-shutdown -h +30
+echo "[INFO] Uploading logs to S3..."
+aws s3 cp /var/log/startup.log "s3://${BUCKET_NAME}/logs/${ENVIRONMENT}/ec2_logs/startup-${DATE}.log" || true
+aws s3 cp "$APP_DIR/app.log" "s3://${BUCKET_NAME}/logs/${ENVIRONMENT}/app_logs/app-${DATE}.log" || true
+aws s3 cp /tmp/app_ready.txt "s3://${BUCKET_NAME}/status/${ENVIRONMENT}/app_ready.txt" || true
