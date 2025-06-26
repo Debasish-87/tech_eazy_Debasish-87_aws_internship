@@ -5,10 +5,10 @@ set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # Injected via Terraform
-BUCKET_NAME="${BUCKET_NAME}"
-ENVIRONMENT="${ENVIRONMENT}"
-DATE="${DATE}"
-GITHUB_PAT="${GITHUB_PAT:-}"  # optional, only needed for prod
+BUCKET_NAME="$${BUCKET_NAME}"
+ENVIRONMENT="$${ENVIRONMENT}"
+DATE="$${DATE}"
+GITHUB_PAT="$${GITHUB_PAT:-}"  # optional, only needed for prod
 
 # Wait until /home/ubuntu exists (EC2 home ready)
 while [ ! -d "/home/ubuntu" ]; do
@@ -40,23 +40,24 @@ export JAVA_HOME=$(dirname $(dirname "$JAVA_PATH"))
 export PATH="$JAVA_HOME/bin:$PATH"
 
 # Repo Selection
-if [ "$STAGE" == "prod" ]; then
-  REPO_URL="https://${GITHUB_PAT}@github.com/Debasish-87/tech_eazy_prod_repo.git"
+if [ "$${ENVIRONMENT}" == "prod" ]; then
+  REPO_URL="https://$${GITHUB_PAT}@github.com/Debasish-87/tech_eazy_prod_repo.git"
 else
   REPO_URL="https://github.com/Debasish-87/tech_eazy_Debasish-87_aws_internship.git"
 fi
-
 
 echo "[INFO] Cloning and building Spring Boot app from $REPO_URL..."
 
 sudo -u ubuntu bash <<EOF
 cd /home/ubuntu
 
-if [ ! -d "$APP_DIR" ]; then
-  git clone $REPO_URL $APP_DIR
+APP_DIR="app"
+
+if [ ! -d "\$APP_DIR" ]; then
+  git clone $REPO_URL \$APP_DIR
 fi
 
-cd $APP_DIR
+cd \$APP_DIR
 
 # Ensure server runs on port 80
 mkdir -p src/main/resources
@@ -76,13 +77,13 @@ nohup ./mvnw spring-boot:run > app.log 2>&1 &
 EOF
 
 # Fix permissions
-chown -R ubuntu:ubuntu "$APP_DIR"
-chown ubuntu:ubuntu "$APP_DIR/app.log"
+chown -R ubuntu:ubuntu "/home/ubuntu/app"
+chown ubuntu:ubuntu "/home/ubuntu/app/app.log"
 
 # Health marker
-echo " Application is running on environment: $ENVIRONMENT" | tee /tmp/app_ready.txt
+echo " Application is running on environment: $${ENVIRONMENT}" | tee /tmp/app_ready.txt
 
 echo "[INFO] Uploading logs to S3..."
-aws s3 cp /var/log/startup.log "s3://${BUCKET_NAME}/logs/${ENVIRONMENT}/ec2_logs/startup-${DATE}.log" || true
-aws s3 cp "$APP_DIR/app.log" "s3://${BUCKET_NAME}/logs/${ENVIRONMENT}/app_logs/app-${DATE}.log" || true
-aws s3 cp /tmp/app_ready.txt "s3://${BUCKET_NAME}/status/${ENVIRONMENT}/app_ready.txt" || true
+aws s3 cp /var/log/startup.log "s3://$${BUCKET_NAME}/logs/$${ENVIRONMENT}/ec2_logs/startup-$${DATE}.log" || true
+aws s3 cp "/home/ubuntu/app/app.log" "s3://$${BUCKET_NAME}/logs/$${ENVIRONMENT}/app_logs/app-$${DATE}.log" || true
+aws s3 cp /tmp/app_ready.txt "s3://$${BUCKET_NAME}/status/$${ENVIRONMENT}/app_ready.txt" || true
