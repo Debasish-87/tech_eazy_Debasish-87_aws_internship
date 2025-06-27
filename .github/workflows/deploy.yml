@@ -1,4 +1,4 @@
-name: Multi-Stage Deployment: Dev then Prod
+name: "Multi-Stage Deployment - Dev then Prod"
 
 on:
   push:
