@@ -1,0 +1,55 @@
+#!/bin/bash
+set -e
+
+# Variables injected by Terraform
+REPO_URL="${REPO_URL}"
+log_s3_bucket_name="${log_s3_bucket_name}"
+stage="${stage}"
+shutdown_after_minutes=${shutdown_after_minutes}
+
+# Update system and install required packages
+apt-get update -y
+apt-get install -y unzip curl openjdk-21-jdk git maven
+
+# Install AWS CLI v2 if not installed
+if ! command -v aws &> /dev/null; then
+  echo "Installing AWS CLI..."
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  unzip awscliv2.zip
+  sudo ./aws/install
+fi
+
+# Clone the GitHub repository
+cd /home/ubuntu
+git clone "${REPO_URL}"
+REPO_NAME=$(basename "${REPO_URL}" .git)
+cd "$REPO_NAME"
+
+# Build and run the app
+mvn clean install
+java -jar target/*.jar --server.port=80 > /var/log/my-app.log 2>&1 &
+
+# Wait for app to start
+sleep 120
+
+# Generate fallback config instead of fetching from S3
+cat <<EOF > /home/ubuntu/app_config.json
+{
+  "stage": "${stage}",
+  "source": "local-fallback",
+  "timestamp": "$(date)"
+}
+EOF
+echo "✅ Local fallback config created."
+
+# Upload logs to S3
+TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+aws s3 cp /var/log/cloud-init.log s3://${log_s3_bucket_name}/${stage}/logs/system_logs/cloud-init-${TIMESTAMP}.log||echo "cloud-init uploaded failed"
+aws s3 cp /var/log/my-app.log s3://${log_s3_bucket_name}/${stage}/logs/app_logs/app-${TIMESTAMP}.log||echo "app.log upload failed"
+
+# Mark app as ready
+touch /home/ubuntu/app_ready.txt
+aws s3 cp /home/ubuntu/app_ready.txt s3://${log_s3_bucket_name}/${stage}/status/app_ready.txt||echo "app_ready.txt upload failed"
+
+# Auto shutdown after defined minutes
+sudo shutdown -h +${shutdown_after_minutes}
