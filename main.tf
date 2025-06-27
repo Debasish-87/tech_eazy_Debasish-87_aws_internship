@@ -2,6 +2,7 @@ provider "aws" {
   region = var.aws_region
 }
 
+# VPC
 resource "aws_vpc" "custom_vpc" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -12,6 +13,7 @@ resource "aws_vpc" "custom_vpc" {
   }
 }
 
+# Subnet
 resource "aws_subnet" "public_subnet" {
   vpc_id                  = aws_vpc.custom_vpc.id
   cidr_block              = var.public_subnet_cidr
@@ -23,6 +25,7 @@ resource "aws_subnet" "public_subnet" {
   }
 }
 
+# Internet Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.custom_vpc.id
 
@@ -31,6 +34,7 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
+# Route Table
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.custom_vpc.id
 
@@ -39,17 +43,20 @@ resource "aws_route_table" "public_rt" {
   }
 }
 
+# Route to Internet
 resource "aws_route" "internet_access" {
   route_table_id         = aws_route_table.public_rt.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw.id
 }
 
+# Associate Route Table with Subnet
 resource "aws_route_table_association" "public_subnet_association" {
   subnet_id      = aws_subnet.public_subnet.id
   route_table_id = aws_route_table.public_rt.id
 }
 
+# Security Group
 resource "aws_security_group" "web_security_group" {
   name        = "${var.environment}-web-security-group"
   description = "Allow HTTP & SSH inbound traffic"
@@ -66,7 +73,7 @@ resource "aws_security_group" "web_security_group" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -81,6 +88,34 @@ resource "aws_security_group" "web_security_group" {
   }
 }
 
+# IAM Role for EC2
+resource "aws_iam_role" "ec2_role" {
+  name = "${var.environment}-ec2-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+# Attach Policy to Role (e.g., S3 access)
+resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+# IAM Instance Profile
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${var.environment}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# EC2 Instance
 resource "aws_instance" "app" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
@@ -99,4 +134,9 @@ resource "aws_instance" "app" {
   tags = {
     Name = "${var.environment}-app-instance"
   }
+}
+
+# Optional output
+output "instance_public_ip" {
+  value = aws_instance.app.public_ip
 }

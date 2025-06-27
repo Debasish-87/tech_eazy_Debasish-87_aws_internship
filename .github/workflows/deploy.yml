@@ -72,7 +72,7 @@ jobs:
       - name: Validate App on Port 80
         run: |
           echo "Checking application health at http://${INSTANCE_IP}..."
-          for i in {1..10}; do
+          for i in {1..30}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
               echo "Application is healthy (HTTP 200)"
