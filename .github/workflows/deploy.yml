@@ -1,6 +1,9 @@
 name: Multi-Stage CI/CD for Dev and Prod
 
 on:
+  push:
+    branches:
+      - feature/assignment-4  # Add your branch name here
   workflow_dispatch:
 
 env:
