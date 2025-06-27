@@ -3,7 +3,7 @@ name: Multi-Stage Deployment: Dev then Prod
 on:
   push:
     branches:
-      - main
+      - feature/final-assignment-4
 
 jobs:
   deploy-dev:
