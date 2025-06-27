@@ -50,26 +50,29 @@ jobs:
         run: |
           terraform init
           terraform workspace select ${{ env.SELECTED_STAGE }} || terraform workspace new ${{ env.SELECTED_STAGE }}
+
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           if [ "${{ env.SELECTED_STAGE }}" == "prod" ]; then
             terraform apply -auto-approve \
-              -var-file=prod.tfvars \
+              -var-file=prod_config.tfvars \
               -var="github_private_repo=${{ secrets.PRIVATE_REPO }}" \
-              -var="github_token=${{secrets.PRIVATE_REPO_TOKEN}}" \
+              -var="github_token=${{ secrets.PRIVATE_REPO_TOKEN }}" \
               -var="stage=prod"
           else
             terraform apply -auto-approve \
-              -var-file=dev.tfvars \
+              -var-file=dev_config.tfvars \
               -var="github_repo_url=https://github.com/${{ secrets.PUBLIC_REPO }}" \
               -var="stage=dev"
           fi
+
       - name: Get EC2 Public IP & S3 Bucket Name
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           echo "INSTANCE_IP=$(terraform output -raw app_ec2_public_ip)" >> $GITHUB_ENV
           echo "S3_BUCKET=$(terraform output -raw s3_log_bucket)" >> $GITHUB_ENV
+
       - name: Wait for app_ready.txt
         run: |
           echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/${{ env.SELECTED_STAGE }}/status/"
@@ -78,10 +81,11 @@ jobs:
               echo " app_ready.txt found on attempt $i"
               break
             else
-              echo "Attempt $i: app_ready.txt not found... retrying in 10s"
+              echo " Attempt $i: app_ready.txt not found... retrying in 10s"
               sleep 10
             fi
           done
+
       - name: Validate App Running
         run: |
           echo "Validating http://${INSTANCE_IP}"
