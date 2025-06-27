@@ -43,7 +43,7 @@ resource "aws_instance" "app_server" {
   iam_instance_profile = var.stage == "dev" ? aws_iam_instance_profile.ec2_instance_profile_b[0].name : data.aws_iam_instance_profile.ec2_instance_profile_b[0].name
   associate_public_ip_address = true
 
-  user_data = templatefile("${path.module}/scripts/user_data.sh.tftpl", {
+  user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     log_s3_bucket_name=var.log_s3_bucket_name
     shutdown_after_minutes = var.shutdown_after_minutes
     stage= var.stage

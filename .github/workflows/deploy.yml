@@ -21,7 +21,7 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  TF_WORKING_DIR: ./ec2-deployement
+  TF_WORKING_DIR: .
   TF_VAR_shutdown_after_minutes: 30
 
 jobs:
@@ -97,4 +97,3 @@ jobs:
           done
           echo " App failed health check"
           exit 1
-          
