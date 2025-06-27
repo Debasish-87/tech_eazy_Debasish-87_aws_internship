@@ -38,6 +38,7 @@ locals {
 resource "aws_instance" "app_server" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
+  key_name = "debasishkey"
   subnet_id = aws_subnet.public_subnet.id
   vpc_security_group_ids = [aws_security_group.allow_http_and_ssh.id]
   iam_instance_profile = var.stage == "dev" ? aws_iam_instance_profile.ec2_instance_profile_b[0].name : data.aws_iam_instance_profile.ec2_instance_profile_b[0].name
