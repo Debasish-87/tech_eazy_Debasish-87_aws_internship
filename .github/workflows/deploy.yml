@@ -1,10 +1,23 @@
-name: Multi-Stage CI/CD for Dev and Prod
+name: Multi-Stage Terraform CI/CD for Dev → Prod
 
 on:
   push:
     branches:
-      - feature/assignment-4  # Add your branch name here
+      - feature/assignment-4
+    tags:
+      - deploy-dev
+      - deploy-prod
+
   workflow_dispatch:
+    inputs:
+      stage:
+        description: "Select stage to deploy"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
 
 env:
   AWS_REGION: ap-south-1
@@ -13,11 +26,11 @@ env:
 
 jobs:
   deploy-dev:
-    name: Deploy to Dev
     runs-on: ubuntu-latest
+    name: Deploy to Dev Environment
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Configure AWS credentials
@@ -30,62 +43,59 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init & Workspace (dev)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Terraform Init & Workspace
         run: |
           terraform init
           terraform workspace select dev || terraform workspace new dev
 
-      - name: Terraform Apply (dev)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Terraform Apply for Dev
         run: |
           terraform apply -auto-approve \
             -var-file=dev_config.tfvars \
             -var="github_repo_url=https://github.com/${{ secrets.PUBLIC_REPO }}" \
             -var="stage=dev"
 
-      - name: Get EC2 Public IP & S3 Bucket (dev)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Get Dev Outputs
         run: |
           echo "INSTANCE_IP=$(terraform output -raw app_ec2_public_ip)" >> $GITHUB_ENV
-          echo "S3_BUCKET=$(terraform output -raw s3_log_bucket)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw log_s3_bucket)" >> $GITHUB_ENV
 
-      - name: Wait for app_ready.txt (dev)
+      - name: Wait for app_ready.txt (Dev)
         run: |
           echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/dev/status/"
           for i in {1..30}; do
             if aws s3 ls s3://${S3_BUCKET}/dev/status/app_ready.txt >/dev/null 2>&1; then
-              echo "app_ready.txt found on attempt $i"
+              echo " app_ready.txt found on attempt $i"
               break
             else
-              echo "Attempt $i: app_ready.txt not found... retrying in 10s"
+              echo " Attempt $i: app_ready.txt not found... retrying in 10s"
               sleep 10
             fi
           done
 
-      - name: Validate App is Running (dev)
+      - name: Validate Dev App
         run: |
-          echo "Validating app at http://${INSTANCE_IP}"
+          echo "Validating http://${INSTANCE_IP}"
           for i in {1..10}; do
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo "App is healthy (HTTP 200)"
+              echo " App is healthy (HTTP 200)"
               exit 0
             else
-              echo "Attempt $i: HTTP $STATUS"
+              echo "Attempt $i: got HTTP $STATUS"
               sleep 10
             fi
           done
-          echo "App failed health check"
+          echo " App failed health check"
           exit 1
 
   deploy-prod:
-    name: Deploy to Prod
     runs-on: ubuntu-latest
+    name: Deploy to Prod Environment
     needs: deploy-dev
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Configure AWS credentials
@@ -98,52 +108,49 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init & Workspace (prod)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Terraform Init & Workspace
         run: |
           terraform init
           terraform workspace select prod || terraform workspace new prod
 
-      - name: Terraform Apply (prod)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Terraform Apply for Prod
         run: |
           terraform apply -auto-approve \
             -var-file=prod_config.tfvars \
+            -var="github_token=${{ secrets.PRIVATE_REPO_TOKEN }}" \
             -var="github_private_repo=${{ secrets.PRIVATE_REPO }}" \
-            -var="github_token=${{ secrets.PRIVATE_REPO_PAT }}" \
             -var="stage=prod"
 
-      - name: Get EC2 Public IP & S3 Bucket (prod)
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      - name: Get Prod Outputs
         run: |
           echo "INSTANCE_IP=$(terraform output -raw app_ec2_public_ip)" >> $GITHUB_ENV
-          echo "S3_BUCKET=$(terraform output -raw s3_log_bucket)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw log_s3_bucket)" >> $GITHUB_ENV
 
-      - name: Wait for app_ready.txt (prod)
+      - name: Wait for app_ready.txt (Prod)
         run: |
           echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/prod/status/"
           for i in {1..30}; do
             if aws s3 ls s3://${S3_BUCKET}/prod/status/app_ready.txt >/dev/null 2>&1; then
-              echo "app_ready.txt found on attempt $i"
+              echo " app_ready.txt found on attempt $i"
               break
             else
-              echo "Attempt $i: app_ready.txt not found... retrying in 10s"
+              echo " Attempt $i: app_ready.txt not found... retrying in 10s"
               sleep 10
             fi
           done
 
-      - name: Validate App is Running (prod)
+      - name: Validate Prod App
         run: |
-          echo "Validating app at http://${INSTANCE_IP}"
+          echo "Validating http://${INSTANCE_IP}"
           for i in {1..10}; do
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo "App is healthy (HTTP 200)"
+              echo " App is healthy (HTTP 200)"
               exit 0
             else
-              echo "Attempt $i: HTTP $STATUS"
+              echo "Attempt $i: got HTTP $STATUS"
               sleep 10
             fi
           done
-          echo "App failed health check"
+          echo " App failed health check"
           exit 1
