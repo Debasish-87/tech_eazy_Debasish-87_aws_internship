@@ -1,81 +1,140 @@
-name:  Deploy Java App to EC2
+name: Multi-Stage Deployment: Dev then Prod
 
 on:
   push:
     branches:
-      - feature/devops-assignment-3-final
-    tags:
-      - 'v*'
+      - main
 
 jobs:
-  deploy:
+  deploy-dev:
+    name: Deploy to Dev Stage
     runs-on: ubuntu-latest
+    environment: dev
 
     env:
       AWS_REGION: ap-south-1
-      TF_VAR_aws_region: ap-south-1
-      TF_VAR_logs_bucket_name: techeazy-dev-logs-debasish-87
-      TF_VAR_project_name: techeazy-devops
-      TF_VAR_environment: dev
+      TFVARS_FILE: dev_config.tfvars
       STAGE: dev
+      LOGS_BUCKET: techeazy-central-logs-debasish-87
+      GITHUB_PAT: ""
 
     steps:
-      - name:  Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name:  Configure AWS Credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name:  Setup Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name:  Terraform Init
+      - name: Terraform Init
         run: terraform init
 
-      - name:  Terraform Plan
-        run: terraform plan -var-file="dev_config.tfvars"
+      - name: Terraform Plan
+        run: terraform plan -var-file=${{ env.TFVARS_FILE }}
 
-      - name:  Terraform Apply
-        run: terraform apply -auto-approve -var-file="dev_config.tfvars"
-
-      - name:  Get EC2 Public IP
-        id: instance
+      - name: Terraform Apply
         run: |
-          echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
-          echo "EC2 Public IP: $INSTANCE_IP"
+          terraform apply -auto-approve \
+            -var-file=${{ env.TFVARS_FILE }} \
+            -var="stage=${{ env.STAGE }}" \
+            -var="github_pat="
 
-      - name:  Wait for EC2 to upload app_ready.txt (Max 5 min)
+      - name: Fetch EC2 Public IP
+        id: ip
+        run: echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
+
+      - name: Wait for app_ready.txt
         run: |
-          echo " Waiting for EC2 to signal app readiness via app_ready.txt in S3..."
           for i in {1..30}; do
-            if aws s3 ls s3://${{ env.TF_VAR_logs_bucket_name }}/status/app_ready.txt >/dev/null 2>&1; then
-              echo " Signal received: app_ready.txt found in S3 on attempt $i"
+            if aws s3 ls s3://${{ env.LOGS_BUCKET }}/logs/${{ env.STAGE }}/app_ready.txt >/dev/null 2>&1; then
+              echo "App is ready on dev stage."
               break
-            else
-              echo " Attempt $i: app_ready.txt not found... sleeping 10s"
-              sleep 10
             fi
+            sleep 10
           done
 
-      - name:  Validate App on Port 80
+      - name: Validate App on Port 80
         run: |
-          echo " Validating app at http://${INSTANCE_IP} ..."
-          for i in {1..40}; do
-            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo " App is healthy and returned HTTP 200 on attempt $i"
+              echo "App is up and running on dev."
               exit 0
-            else
-              echo " Attempt $i: App not ready yet, got HTTP $STATUS"
-              sleep 15
             fi
+            sleep 10
           done
-          echo " App failed health check after 40 attempts (~10 mins)"
+          echo "App failed health check on dev stage."
           exit 1
 
+  deploy-prod:
+    name: Deploy to Prod Stage
+    runs-on: ubuntu-latest
+    environment: prod
+    needs: deploy-dev
 
-          
+    env:
+      AWS_REGION: ap-south-1
+      TFVARS_FILE: prod_config.tfvars
+      STAGE: prod
+      LOGS_BUCKET: techeazy-central-logs-debasish-87
+      GITHUB_PAT: ${{ secrets.PRIVATE_REPO_PAT }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -var-file=${{ env.TFVARS_FILE }}
+
+      - name: Terraform Apply
+        run: |
+          terraform apply -auto-approve \
+            -var-file=${{ env.TFVARS_FILE }} \
+            -var="stage=${{ env.STAGE }}" \
+            -var="github_pat=${{ env.GITHUB_PAT }}"
+
+      - name: Fetch EC2 Public IP
+        id: ip
+        run: echo "INSTANCE_IP=$(terraform output -raw instance_public_ip)" >> $GITHUB_ENV
+
+      - name: Wait for app_ready.txt
+        run: |
+          for i in {1..30}; do
+            if aws s3 ls s3://${{ env.LOGS_BUCKET }}/logs/${{ env.STAGE }}/app_ready.txt >/dev/null 2>&1; then
+              echo "App is ready on prod stage."
+              break
+            fi
+            sleep 10
+          done
+
+      - name: Validate App on Port 80
+        run: |
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${INSTANCE_IP})
+            if [[ "$STATUS" == "200" ]]; then
+              echo "App is up and running on prod."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "App failed health check on prod stage."
+          exit 1

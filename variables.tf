@@ -25,7 +25,7 @@ variable "ami_id" {
 
 variable "key_name" {
   type    = string
-  default = "debasish-key"
+  default = "debasishkey"
 }
 
 variable "environment" {
@@ -38,9 +38,18 @@ variable "project_name" {
   type        = string
 }
 
-
 variable "logs_bucket_name" {
-  type = string
+  type        = string
   description = "Name of the S3 bucket to store logs"
 }
 
+variable "stage" {
+  type        = string
+  description = "Deployment stage (e.g. dev, prod)"
+}
+
+variable "github_pat" {
+  type        = string
+  description = "GitHub Personal Access Token for private repo access"
+  default     = ""
+}

@@ -10,11 +10,10 @@ done
 
 apt-get update -y
 apt-get upgrade -y
-sudo apt install unzip
-apt install -y openjdk-21-jdk maven git lsof
+sudo apt install unzip -y
+apt install -y openjdk-21-jdk maven git lsof curl
 
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-apt-get install -y unzip curl
 unzip /tmp/awscliv2.zip -d /tmp
 sudo /tmp/aws/install
 
@@ -23,21 +22,19 @@ export PATH=$JAVA_HOME/bin:$PATH
 
 sudo -u ubuntu bash <<EOF
 cd /home/ubuntu
+
+REPO_URL="https://github.com/techeazy-consulting/techeazy-devops.git"
+if [ "${stage}" == "prod" ]; then
+  REPO_URL="https://${github_pat}@github.com/Debasish-87/tech_eazy_prod_repo.git"
+fi
+
+
 if [ ! -d "techeazy-devops" ]; then
-  git clone https://github.com/techeazy-consulting/techeazy-devops.git
+  git clone \$REPO_URL
 fi
 cd techeazy-devops
 chmod +x mvnw
-export HOME=/home/ubuntu
 
-JAVA_PATH=$(readlink -f "$(which java)")
-EOF
-
-JAVA_PATH=$(readlink -f "$(which java)")
-setcap 'cap_net_bind_service=+ep' "$JAVA_PATH"
-
-sudo -u ubuntu bash <<EOF
-cd /home/ubuntu/techeazy-devops
 mkdir -p src/main/resources
 if grep -q "^server.port=" src/main/resources/application.properties 2>/dev/null; then
   sed -i 's/^server.port=.*/server.port=80/' src/main/resources/application.properties
@@ -54,12 +51,10 @@ EOF
 chown -R ubuntu:ubuntu /home/ubuntu/techeazy-devops
 chown ubuntu:ubuntu /home/ubuntu/techeazy-devops/app.log
 
-BUCKET_NAME="${logs_bucket_name}" 
 DATE=$(date +%F-%T)
-aws s3 cp /var/log/startup.log s3://$BUCKET_NAME/ec2_logs/startup-$DATE.log || true
-aws s3 cp /home/ubuntu/techeazy-devops/app.log s3://$BUCKET_NAME/app/logs/app-$DATE.log || true
-
+aws s3 cp /var/log/startup.log s3://${logs_bucket_name}/logs/${stage}/startup-${DATE}.log || true
+aws s3 cp /home/ubuntu/techeazy-devops/app.log s3://${logs_bucket_name}/logs/${stage}/app-${DATE}.log || true
 echo "Application is up and running" > /tmp/app_ready.txt
-aws s3 cp /tmp/app_ready.txt s3://$BUCKET_NAME/status/app_ready.txt || true
+aws s3 cp /tmp/app_ready.txt s3://${logs_bucket_name}/logs/${stage}/app_ready.txt || true
 
 shutdown -h +30

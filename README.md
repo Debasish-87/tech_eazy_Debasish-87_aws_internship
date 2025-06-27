@@ -1,144 +1,88 @@
-# DevOps Assignment – Automate EC2 Deployment on AWS
+# DevOps Assignment – Multi-Stage EC2 Java App Deployment using Terraform & GitHub Actions
 
-This project automates the deployment of a Java Spring Boot application on an AWS EC2 instance using Terraform. It sets up the infrastructure, installs Java, deploys the app, and shuts down the instance automatically after some time.
-
----
-
-## Objective
-
-This project does the following:
-
-1. Creates an EC2 instance inside a custom VPC
-2. Installs Java 19 on the instance
-3. Clones a GitHub Spring Boot app and starts it
-4. Makes the app available on port 80
-5. Shuts down the EC2 instance after a set time
-6. Uses separate configuration files for Dev and Prod
-7. Keeps AWS credentials safe using environment variables
-8. Includes a Postman file for testing the app
+## Overview
+This project provisions and deploys a Spring Boot Java application to EC2 using Terraform and GitHub Actions. Logs are uploaded to S3. It supports **multi-stage deployment** for `dev` and `prod`.
 
 ---
 
-## Tools Used
-
-* Terraform for automation
-* AWS EC2 to run the app
-* Shell script for setup and deployment
-* GitHub for the app source code
-* Postman for testing the APIs
+## Components Used
+- **Terraform**: AWS infrastructure provisioning
+- **EC2**: Hosts the Spring Boot app
+- **S3**: Stores logs per stage (e.g., `logs/dev/`, `logs/prod/`)
+- **GitHub Actions**: Automates CI/CD pipeline
+- **Spring Boot**: Java backend application
 
 ---
 
-## Project Structure
-
+## Folder Structure
 ```
-tech_eazy_Debasish-87_aws_devops/
-├── main.tf                  # Terraform infrastructure setup
-├── variables.tf             # Input variables
-├── outputs.tf               # Outputs like EC2 IP
-├── user_data.sh             # EC2 startup script
-├── dev_config.tfvars        # Dev environment configuration
-├── resources/
-│   └── postman_collection.json  # Postman API test file
-└── README.md                # Project documentation
+.
+├── main.tf
+├── variables.tf
+├── dev_config.tfvars
+├── prod_config.tfvars
+├── user_data.sh
+├── iam_roles.tf
+├── s3.tf
+├── data.tf
+├── outputs.tf
+├── .github/workflows/deploy.yml
 ```
 
 ---
 
-## How to Use
-
-### Step 1: Clone the Repository
-
-```
-git clone https://github.com/Debasish-87/tech_eazy_Debasish-87_aws_devops.git
-cd tech_eazy_Debasish-87_aws_devops
-```
-
-### Step 2: Set AWS Credentials
-
-Export your AWS credentials using environment variables:
-
-```
-export AWS_ACCESS_KEY_ID=your-access-key
-export AWS_SECRET_ACCESS_KEY=your-secret-key
-```
-
-### Step 3: Initialize Terraform
-
-```
-terraform init
-```
-
-### Step 4: Apply Configuration
-
-Run this command for the Dev environment:
-
-```
-terraform apply -var-file="dev_config.tfvars"
-```
-
-Terraform will:
-
-* Create VPC, subnet, and security group
-* Launch an EC2 instance
-* Install Java 19
-* Clone and start the Spring Boot app
-* Schedule automatic shutdown
-
-### Step 5: Access the Application
-
-After deployment, open the app in your browser using the public IP:
-
-```
-http://<instance_public_ip>
-```
-
-You will see the public IP in the Terraform output.
+## Workflow Summary
+1. On push to `feature/devops-assignment-3-final`, deploys **dev** stage.
+2. If `dev` is successful:
+   - Triggers **prod** deployment.
+3. Logs and status are uploaded to S3 bucket:
+   - `s3://<bucket>/logs/dev/...`
+   - `s3://<bucket>/logs/prod/...`
 
 ---
 
-## API Testing
-
-Open the following Postman collection file to test the app:
-
-```
-resources/postman_collection.json
-```
-
-Import it into Postman and send requests to the application.
+## GitHub Secrets Required
+| Name                | Description                          |
+|---------------------|--------------------------------------|
+| `AWS_ACCESS_KEY_ID`     | AWS IAM Access Key                   |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM Secret Key                   |
+| `GITHUB_PAT`            | GitHub Personal Access Token (for private repo cloning) |
 
 ---
 
-## Cleanup
+## Terraform Input Files
+- `dev_config.tfvars`: Used for Dev deployment
+- `prod_config.tfvars`: Used for Prod deployment
 
-To delete everything and avoid AWS charges:
+---
 
-```
-terraform destroy -var-file="dev_config.tfvars"
+## 🔐 IAM & Security
+- IAM roles created:
+  - **Read-only** role for log verification
+  - **Write-only** role for log upload
+- Lifecycle policy deletes logs after **7 days**
+
+---
+
+## Sample Usage
+### 1. Trigger from GitHub Actions
+Push to `feature/devops-assignment-3-final` to run:
+```bash
+git checkout -b feature/devops-assignment-3-final
+# make changes
+git push origin feature/devops-assignment-3-final
 ```
 
 ---
 
-## Submission Instructions
-
-1. Push the project to a public GitHub repo named:
-
-```
-tech_eazy_<your-github-username>_aws_internship
-```
-
-Example: `tech_eazy_Debasish-87_aws_internship`
-
-2. Submit the GitHub repo URL in the form:
-
-[https://forms.gle/9DfAcyCHsTiQ8qaW7](https://forms.gle/9DfAcyCHsTiQ8qaW7)
+## Validation Steps
+- Application health check via `curl` on port 80
+- EC2 instance auto shutdown after 30 minutes
+- Logs uploaded to S3 with date stamps
+- Signal file `app_ready.txt` used to confirm EC2 setup success
 
 ---
 
-## Author
-
-Debasish Mohanty
-Cloud DevSecOps | Terraform | AWS | CI/CD
-GitHub: [https://github.com/Debasish-87](https://github.com/Debasish-87)
-
----
+## 👤 Author
+**Debasish Mohanty**  
+DevSecOps Intern @ TechEazy Consulting
