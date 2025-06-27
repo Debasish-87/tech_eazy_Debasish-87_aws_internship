@@ -2,7 +2,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-
 resource "aws_vpc" "custom_vpc" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -53,7 +52,7 @@ resource "aws_route_table_association" "public_subnet_association" {
 
 resource "aws_security_group" "web_security_group" {
   name        = "${var.environment}-web-security-group"
-  description = "Allow HTTP inbound traffic"
+  description = "Allow HTTP & SSH inbound traffic"
   vpc_id      = aws_vpc.custom_vpc.id
 
   ingress {
@@ -82,7 +81,6 @@ resource "aws_security_group" "web_security_group" {
   }
 }
 
-
 resource "aws_instance" "app" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
@@ -94,7 +92,8 @@ resource "aws_instance" "app" {
 
   user_data = templatefile("${path.module}/user_data.sh", {
     logs_bucket_name = var.logs_bucket_name,
-    stage            = var.stage
+    stage            = var.stage,
+    github_pat       = var.github_pat
   })
 
   tags = {

@@ -16,7 +16,7 @@ jobs:
       TFVARS_FILE: dev_config.tfvars
       STAGE: dev
       LOGS_BUCKET: techeazy-central-logs-debasish-87
-      GITHUB_PAT: ""  # Public repo assumed for dev
+      GITHUB_PAT: ""  # No PAT needed for public repo
 
     steps:
       - name: Checkout Repository
@@ -87,7 +87,7 @@ jobs:
       TFVARS_FILE: prod_config.tfvars
       STAGE: prod
       LOGS_BUCKET: techeazy-central-logs-debasish-87
-      GITHUB_PAT: ${{ secrets.PRIVATE_REPO_PAT }}  # Required for private repo
+      GITHUB_PAT: ${{ secrets.PRIVATE_REPO_PAT }}  # Required for private repo access
 
     steps:
       - name: Checkout Repository

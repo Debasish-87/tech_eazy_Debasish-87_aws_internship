@@ -1,11 +1,11 @@
 resource "aws_s3_bucket" "logs_bucket" {
   bucket = var.logs_bucket_name
 
+  force_destroy = true
+
   tags = {
     Name = "${var.environment}-logs"
   }
-
-  force_destroy = true  
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "log_expiry" {
@@ -16,7 +16,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_expiry" {
     status = "Enabled"
 
     filter {
-      prefix = ""  
+      prefix = ""  # Applies to all objects
     }
 
     expiration {
@@ -24,4 +24,4 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_expiry" {
     }
   }
 }
-
+  
