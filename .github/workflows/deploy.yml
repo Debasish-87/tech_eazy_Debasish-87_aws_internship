@@ -85,7 +85,6 @@ jobs:
           done
           echo " App failed health check"
           exit 1
-
   deploy-prod:
     runs-on: ubuntu-latest
     name: Deploy to Prod Environment
@@ -108,7 +107,7 @@ jobs:
       - name: Terraform Init & Workspace
         run: |
           terraform init
-          terraform workspace select prod || terraform workspace new prod
+          terraform workspace select -or-create prod
 
       - name: Terraform Apply for Prod
         run: |
@@ -128,10 +127,10 @@ jobs:
           echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/prod/status/"
           for i in {1..30}; do
             if aws s3 ls s3://${S3_BUCKET}/prod/status/app_ready.txt >/dev/null 2>&1; then
-              echo " app_ready.txt found on attempt $i"
+              echo "✅ app_ready.txt found on attempt $i"
               break
             else
-              echo " Attempt $i: app_ready.txt not found... retrying in 10s"
+              echo "⏳ Attempt $i: app_ready.txt not found... retrying in 10s"
               sleep 10
             fi
           done
@@ -142,12 +141,12 @@ jobs:
           for i in {1..10}; do
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo " App is healthy (HTTP 200)"
+              echo "✅ App is healthy (HTTP 200)"
               exit 0
             else
-              echo "Attempt $i: got HTTP $STATUS"
+              echo "❌ Attempt $i: got HTTP $STATUS"
               sleep 10
             fi
           done
-          echo " App failed health check"
+          echo "❌ App failed health check"
           exit 1
