@@ -16,7 +16,7 @@ jobs:
       TFVARS_FILE: dev_config.tfvars
       STAGE: dev
       LOGS_BUCKET: techeazy-central-logs-debasish-87
-      GITHUB_PAT: ""  # No PAT needed for public repo
+      GITHUB_PAT: ""
 
     steps:
       - name: Checkout Repository
@@ -55,25 +55,33 @@ jobs:
 
       - name: Wait for app_ready.txt in S3
         run: |
+          echo "Waiting for app_ready.txt in S3..."
           for i in {1..30}; do
             if aws s3 ls s3://${{ env.LOGS_BUCKET }}/logs/${{ env.STAGE }}/app_ready.txt >/dev/null 2>&1; then
-              echo "App is ready on dev stage."
+              echo "app_ready.txt found in S3."
               break
             fi
+            echo "Waiting... ($i/30)"
             sleep 10
+            if [ $i -eq 30 ]; then
+              echo "Timeout: app_ready.txt not found in S3"
+              exit 1
+            fi
           done
 
       - name: Validate App on Port 80
         run: |
+          echo "Checking application health at http://${INSTANCE_IP}..."
           for i in {1..10}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo "App is up and running on dev."
+              echo "Application is healthy (HTTP 200)"
               exit 0
             fi
+            echo "Attempt $i failed with HTTP $STATUS"
             sleep 10
           done
-          echo "App failed health check on dev stage."
+          echo "Application failed health check"
           exit 1
 
   deploy-prod:
@@ -87,7 +95,7 @@ jobs:
       TFVARS_FILE: prod_config.tfvars
       STAGE: prod
       LOGS_BUCKET: techeazy-central-logs-debasish-87
-      GITHUB_PAT: ${{ secrets.PRIVATE_REPO_PAT }}  # Required for private repo access
+      GITHUB_PAT: ${{ secrets.PRIVATE_REPO_PAT }}
 
     steps:
       - name: Checkout Repository
@@ -126,23 +134,31 @@ jobs:
 
       - name: Wait for app_ready.txt in S3
         run: |
+          echo "Waiting for app_ready.txt in S3..."
           for i in {1..30}; do
             if aws s3 ls s3://${{ env.LOGS_BUCKET }}/logs/${{ env.STAGE }}/app_ready.txt >/dev/null 2>&1; then
-              echo "App is ready on prod stage."
+              echo "app_ready.txt found in S3."
               break
             fi
+            echo "Waiting... ($i/30)"
             sleep 10
+            if [ $i -eq 30 ]; then
+              echo "Timeout: app_ready.txt not found in S3"
+              exit 1
+            fi
           done
 
       - name: Validate App on Port 80
         run: |
+          echo "Checking application health at http://${INSTANCE_IP}..."
           for i in {1..10}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo "App is up and running on prod."
+              echo "Application is healthy (HTTP 200)"
               exit 0
             fi
+            echo "Attempt $i failed with HTTP $STATUS"
             sleep 10
           done
-          echo "App failed health check on prod stage."
+          echo "Application failed health check"
           exit 1
