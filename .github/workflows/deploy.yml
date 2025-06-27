@@ -50,10 +50,7 @@ jobs:
 
       - name: Terraform Apply for Dev
         run: |
-          terraform apply -auto-approve \
-            -var-file=dev_config.tfvars \
-            -var="github_repo_url=https://github.com/${{ secrets.PUBLIC_REPO }}" \
-            -var="stage=dev"
+          terraform apply -auto-approve -var-file=dev_config.tfvars
 
       - name: Get Dev Outputs
         run: |

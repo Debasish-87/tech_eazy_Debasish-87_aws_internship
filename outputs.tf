@@ -4,6 +4,6 @@ output "app_ec2_public_ip" {
 }
 
 output "log_s3_bucket" {
-  description = "Name of the log S3 bucket"
-  value       = var.log_s3_bucket_name
+  value = var.log_s3_bucket_name
+  description = "The name of the log S3 bucket"
 }
