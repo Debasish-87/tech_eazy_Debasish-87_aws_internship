@@ -36,7 +36,11 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
-        run: terraform plan -var-file=${{ env.TFVARS_FILE }}
+        run: |
+          terraform plan \
+            -var-file=${{ env.TFVARS_FILE }} \
+            -var="stage=${{ env.STAGE }}" \
+            -var="github_pat=${{ env.GITHUB_PAT }}"
 
       - name: Terraform Apply
         run: |
@@ -103,7 +107,11 @@ jobs:
         run: terraform init
 
       - name: Terraform Plan
-        run: terraform plan -var-file=${{ env.TFVARS_FILE }}
+        run: |
+          terraform plan \
+            -var-file=${{ env.TFVARS_FILE }} \
+            -var="stage=${{ env.STAGE }}" \
+            -var="github_pat=${{ env.GITHUB_PAT }}"
 
       - name: Terraform Apply
         run: |
