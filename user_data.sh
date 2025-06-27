@@ -63,12 +63,12 @@ chown ubuntu:ubuntu /home/ubuntu/techeazy-devops/app.log
 
 # Upload logs to S3
 DATE=$(date +%F-%T)
-aws s3 cp /var/log/startup.log s3://${logs_bucket_name}/logs/${stage}/startup-${DATE}.log || true
-aws s3 cp /home/ubuntu/techeazy-devops/app.log s3://${logs_bucket_name}/logs/${stage}/app-${DATE}.log || true
+aws s3 cp /var/log/startup.log s3://\${logs_bucket_name}/logs/\${stage}/startup-\${DATE}.log || true
+aws s3 cp /home/ubuntu/techeazy-devops/app.log s3://\${logs_bucket_name}/logs/\${stage}/app-\${DATE}.log || true
 
 # Readiness check signal
 echo "Application is up and running" > /tmp/app_ready.txt
-aws s3 cp /tmp/app_ready.txt s3://${logs_bucket_name}/logs/${stage}/app_ready.txt || true
+aws s3 cp /tmp/app_ready.txt s3://\${logs_bucket_name}/logs/\${stage}/app_ready.txt || true
 
 # Auto-shutdown after 30 mins
 shutdown -h +30
