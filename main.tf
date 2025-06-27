@@ -109,11 +109,6 @@ resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
 
-# IAM Instance Profile
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.environment}-ec2-profile"
-  role = aws_iam_role.ec2_role.name
-}
 
 # EC2 Instance
 resource "aws_instance" "app" {
@@ -136,7 +131,3 @@ resource "aws_instance" "app" {
   }
 }
 
-# Optional output
-output "instance_public_ip" {
-  value = aws_instance.app.public_ip
-}
