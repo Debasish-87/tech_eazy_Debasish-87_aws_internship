@@ -4,3 +4,12 @@
 *.tfstate.backup
 *.tfvars
 .terraform.lock.hcl
+
+# EXCEPTION: allow this specific tfvars file
+!prod_config.tfvars
+# Terraform and system files
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+.terraform.lock.hcl
