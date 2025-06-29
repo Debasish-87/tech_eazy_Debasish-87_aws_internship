@@ -1,83 +1,159 @@
-name:  Deploy Java App to EC2
+name: Multi-Stage Terraform CI/CD for Dev → Prod
 
 on:
   push:
     branches:
-      - feature/devops-assignment-3-final
+      - feature/assignment-4
     tags:
-      - 'v*'
+      - deploy-dev
+      - deploy-prod
+
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Select stage to deploy"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  AWS_REGION: ap-south-1
+  TF_WORKING_DIR: .
+  TF_VAR_shutdown_after_minutes: 30
 
 jobs:
-  deploy:
+  deploy-dev:
     runs-on: ubuntu-latest
-
-    env:
-      AWS_REGION: ap-south-1
-      TF_VAR_aws_region: ap-south-1
-      TF_VAR_logs_bucket_name: techeazy-dev-logs-debasish-87
-      TF_VAR_project_name: techeazy-devops
-      TF_VAR_environment: dev
-      STAGE: dev
+    name: Deploy to Dev Environment
 
     steps:
-      - name:  Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name:  Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name:  Setup Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name:  Terraform Init
-        run: terraform init
-
-      - name:  Terraform Plan
-        run: terraform plan -var-file="dev_config.tfvars"
-
-      - name:  Terraform Apply
-        run: terraform apply -auto-approve -var-file="dev_config.tfvars"
-
-      - name:  Get EC2 Public IP
-        id: instance
+      - name: Terraform Init & Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          INSTANCE_IP=$(terraform output -raw instance_public_ip)
-          echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_ENV
-          echo "EC2 Public IP: $INSTANCE_IP"
-      
+          terraform init
+          terraform workspace select dev || terraform workspace new dev
 
-      - name:  Wait for EC2 to upload app_ready.txt (Max 5 min)
+      - name: Terraform Apply for Dev
+        working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          echo " Waiting for EC2 to signal app readiness via app_ready.txt in S3..."
+          terraform apply -auto-approve -var-file=dev_config.tfvars
+
+      - name: Get Dev Outputs
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "INSTANCE_IP=$(terraform output -raw app_ec2_public_ip)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw log_s3_bucket)" >> $GITHUB_ENV
+
+      - name: Wait for app_ready.txt (Dev)
+        run: |
+          echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/dev/status/"
           for i in {1..30}; do
-            if aws s3 ls s3://${{ env.TF_VAR_logs_bucket_name }}/status/app_ready.txt >/dev/null 2>&1; then
-              echo " Signal received: app_ready.txt found in S3 on attempt $i"
+            if aws s3 ls s3://${S3_BUCKET}/dev/status/app_ready.txt >/dev/null 2>&1; then
+              echo "app_ready.txt found on attempt $i"
               break
             else
-              echo " Attempt $i: app_ready.txt not found... sleeping 10s"
+              echo "Attempt $i: app_ready.txt not found... retrying in 10s"
               sleep 10
             fi
           done
 
-      - name:  Validate App on Port 80
+      - name: Validate Dev App
         run: |
-          echo " Validating app at http://${INSTANCE_IP} ..."
-          for i in {1..40}; do
+          echo "Validating http://${INSTANCE_IP}"
+          for i in {1..10}; do
             STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
             if [[ "$STATUS" == "200" ]]; then
-              echo " App is healthy and returned HTTP 200 on attempt $i"
+              echo "App is healthy (HTTP 200)"
               exit 0
             else
-              echo " Attempt $i: App not ready yet, got HTTP $STATUS"
-              sleep 15
+              echo "Attempt $i: got HTTP $STATUS"
+              sleep 10
             fi
           done
-          echo " App failed health check after 40 attempts (~10 mins)"
+          echo "App failed health check"
           exit 1
 
+  deploy-prod:
+    runs-on: ubuntu-latest
+    name: Deploy to Prod Environment
+    needs: deploy-dev
 
-          
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init & Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init
+          terraform workspace select prod || terraform workspace new prod
+
+      - name: Terraform Apply for Prod
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform apply -auto-approve \
+            -var-file=prod_config.tfvars \
+            -var="github_token=${{ secrets.PRIVATE_REPO_TOKEN }}" \
+            -var="github_private_repo=${{ secrets.PRIVATE_REPO }}" \
+            -var="stage=prod"
+
+      - name: Get Prod Outputs
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "INSTANCE_IP=$(terraform output -raw app_ec2_public_ip)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw log_s3_bucket)" >> $GITHUB_ENV
+
+      - name: Wait for app_ready.txt (Prod)
+        run: |
+          echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/prod/status/"
+          for i in {1..30}; do
+            if aws s3 ls s3://${S3_BUCKET}/prod/status/app_ready.txt >/dev/null 2>&1; then
+              echo "app_ready.txt found on attempt $i"
+              break
+            else
+              echo "Attempt $i: app_ready.txt not found... retrying in 10s"
+              sleep 10
+            fi
+          done
+
+      - name: Validate Prod App
+        run: |
+          echo "Validating http://${INSTANCE_IP}"
+          for i in {1..10}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
+            if [[ "$STATUS" == "200" ]]; then
+              echo "App is healthy (HTTP 200)"
+              exit 0
+            else
+              echo "Attempt $i: got HTTP $STATUS"
+              sleep 10
+            fi
+          done
+          echo "App failed health check"
+          exit 1

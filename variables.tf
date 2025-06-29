@@ -1,46 +1,44 @@
 variable "aws_region" {
-  type    = string
-  default = "ap-south-1"
-}
-
-variable "vpc_cidr" {
-  type    = string
-  default = "10.1.0.0/16"
-}
-
-variable "public_subnet_cidr" {
-  type    = string
-  default = "10.1.1.0/24"
-}
-
-variable "instance_type" {
-  type    = string
-  default = "t2.micro"
-}
-
-variable "ami_id" {
-  type    = string
-  default = "ami-02521d90e7410d9f0"
-}
-
-variable "key_name" {
-  type    = string
-  default = "debasish-key"
-}
-
-variable "environment" {
-  type    = string
-  default = "dev"
-}
-
-variable "project_name" {
-  description = "Name of the project"
+  description = "The AWS region where resources will be deployed (e.g., us-east-1)"
   type        = string
 }
 
-
-variable "logs_bucket_name" {
-  type = string
-  description = "Name of the S3 bucket to store logs"
+variable "instance_type" {
+  default = "t2.micro"
+  type        = string
 }
 
+variable "ami_id" {
+  description = "The AMI ID used to launch the EC2 instance"
+  type        = string
+}
+
+variable "stage" {
+  description = "Stage identifier to differentiate environments (e.g., dev, test, prod)"
+  type        = string
+}
+variable "log_s3_bucket_name" {
+  description = "Name of the S3 bucket to store logs"
+  type        = string
+}
+variable"shutdown_after_minutes"{
+  description = "Number of minutes after which EC2 instance should Auto-shutdown"
+  type = number
+}
+
+variable "github_token" {
+  description = "Github PAT for private repo access(prod only)"
+  type=string
+  default = ""
+  sensitive = true
+}
+variable "github_repo_url" {
+  description = "Github repo URL for dev and prod"
+  type=string
+}
+
+variable "github_private_repo" {
+  description = "Github private repo URL for prod"
+  default = ""
+  type=string
+}
