@@ -1,0 +1,83 @@
+name:  Deploy Java App to EC2
+
+on:
+  push:
+    branches:
+      - feature/devops-assignment-3-final
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ap-south-1
+      TF_VAR_aws_region: ap-south-1
+      TF_VAR_logs_bucket_name: techeazy-dev-logs-debasish-87
+      TF_VAR_project_name: techeazy-devops
+      TF_VAR_environment: dev
+      STAGE: dev
+
+    steps:
+      - name:  Checkout Code
+        uses: actions/checkout@v3
+
+      - name:  Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name:  Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name:  Terraform Init
+        run: terraform init
+
+      - name:  Terraform Plan
+        run: terraform plan -var-file="dev_config.tfvars"
+
+      - name:  Terraform Apply
+        run: terraform apply -auto-approve -var-file="dev_config.tfvars"
+
+      - name:  Get EC2 Public IP
+        id: instance
+        run: |
+          INSTANCE_IP=$(terraform output -raw instance_public_ip)
+          echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_ENV
+          echo "EC2 Public IP: $INSTANCE_IP"
+      
+
+      - name:  Wait for EC2 to upload app_ready.txt (Max 5 min)
+        run: |
+          echo " Waiting for EC2 to signal app readiness via app_ready.txt in S3..."
+          for i in {1..30}; do
+            if aws s3 ls s3://${{ env.TF_VAR_logs_bucket_name }}/status/app_ready.txt >/dev/null 2>&1; then
+              echo " Signal received: app_ready.txt found in S3 on attempt $i"
+              break
+            else
+              echo " Attempt $i: app_ready.txt not found... sleeping 10s"
+              sleep 10
+            fi
+          done
+
+      - name:  Validate App on Port 80
+        run: |
+          echo " Validating app at http://${INSTANCE_IP} ..."
+          for i in {1..40}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
+            if [[ "$STATUS" == "200" ]]; then
+              echo " App is healthy and returned HTTP 200 on attempt $i"
+              exit 0
+            else
+              echo " Attempt $i: App not ready yet, got HTTP $STATUS"
+              sleep 15
+            fi
+          done
+          echo " App failed health check after 40 attempts (~10 mins)"
+          exit 1
+
+
+          
