@@ -1,8 +1,13 @@
+<<<<<<< HEAD
 name: Deploy Infrastructure and App
+=======
+name: Multi-Stage Terraform CI/CD for Dev → Prod
+>>>>>>> feature/assignment-4
 
 on:
   push:
     branches:
+<<<<<<< HEAD
       - feature/devops-assignment-3   # change to `main` once merged
     tags:
       - deploy-*                     # e.g. deploy-dev / deploy-prod
@@ -28,6 +33,38 @@ jobs:
         run: echo "STAGE=${GITHUB_REF#refs/tags/deploy-}" >> "$GITHUB_ENV"
 
       # 3. Configure AWS credentials (stored as repo → Settings → Secrets)
+=======
+      - feature/assignment-4
+    tags:
+      - deploy-dev
+      - deploy-prod
+
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Select stage to deploy"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  AWS_REGION: ap-south-1
+  TF_WORKING_DIR: .
+  TF_VAR_shutdown_after_minutes: 30
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    name: Deploy to Dev Environment
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+>>>>>>> feature/assignment-4
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -35,6 +72,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+<<<<<<< HEAD
       # 4. Install Terraform CLI
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -97,3 +135,122 @@ jobs:
             - 🟢 Health check passed on port 80
           base: feature/devops-assignment-2-v2
           branch: feature/devops-assignment-3
+=======
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init & Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init
+          terraform workspace select dev || terraform workspace new dev
+
+      - name: Terraform Apply for Dev
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform apply -auto-approve -var-file=dev_config.tfvars
+
+      - name: Get Dev Outputs
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "INSTANCE_IP=$(terraform output -raw app_ec2_public_ip)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw log_s3_bucket)" >> $GITHUB_ENV
+
+      - name: Wait for app_ready.txt (Dev)
+        run: |
+          echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/dev/status/"
+          for i in {1..30}; do
+            if aws s3 ls s3://${S3_BUCKET}/dev/status/app_ready.txt >/dev/null 2>&1; then
+              echo "app_ready.txt found on attempt $i"
+              break
+            else
+              echo "Attempt $i: app_ready.txt not found... retrying in 10s"
+              sleep 10
+            fi
+          done
+
+      - name: Validate Dev App
+        run: |
+          echo "Validating http://${INSTANCE_IP}"
+          for i in {1..10}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
+            if [[ "$STATUS" == "200" ]]; then
+              echo "App is healthy (HTTP 200)"
+              exit 0
+            else
+              echo "Attempt $i: got HTTP $STATUS"
+              sleep 10
+            fi
+          done
+          echo "App failed health check"
+          exit 1
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    name: Deploy to Prod Environment
+    needs: deploy-dev
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init & Workspace
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init
+          terraform workspace select prod || terraform workspace new prod
+
+      - name: Terraform Apply for Prod
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform apply -auto-approve \
+            -var-file=prod_config.tfvars \
+            -var="github_token=${{ secrets.PRIVATE_REPO_TOKEN }}" \
+            -var="github_private_repo=${{ secrets.PRIVATE_REPO }}" \
+            -var="stage=prod"
+
+      - name: Get Prod Outputs
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "INSTANCE_IP=$(terraform output -raw app_ec2_public_ip)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw log_s3_bucket)" >> $GITHUB_ENV
+
+      - name: Wait for app_ready.txt (Prod)
+        run: |
+          echo "Waiting for app_ready.txt in s3://${S3_BUCKET}/prod/status/"
+          for i in {1..30}; do
+            if aws s3 ls s3://${S3_BUCKET}/prod/status/app_ready.txt >/dev/null 2>&1; then
+              echo "app_ready.txt found on attempt $i"
+              break
+            else
+              echo "Attempt $i: app_ready.txt not found... retrying in 10s"
+              sleep 10
+            fi
+          done
+
+      - name: Validate Prod App
+        run: |
+          echo "Validating http://${INSTANCE_IP}"
+          for i in {1..10}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://${INSTANCE_IP})
+            if [[ "$STATUS" == "200" ]]; then
+              echo "App is healthy (HTTP 200)"
+              exit 0
+            else
+              echo "Attempt $i: got HTTP $STATUS"
+              sleep 10
+            fi
+          done
+          echo "App failed health check"
+          exit 1
+>>>>>>> feature/assignment-4

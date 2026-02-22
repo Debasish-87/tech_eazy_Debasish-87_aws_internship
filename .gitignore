@@ -2,6 +2,10 @@
 .terraform/
 *.tfstate
 *.tfstate.backup
-*.tfvars
 .terraform.lock.hcl
 
+# Ignore all tfvars
+*.tfvars
+
+# EXCEPTION: allow this specific tfvars file
+!prod_config.tfvars

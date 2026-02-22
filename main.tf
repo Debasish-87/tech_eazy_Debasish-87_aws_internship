@@ -2,58 +2,10 @@ provider "aws" {
   region = var.aws_region
 }
 
-resource "aws_vpc" "custom_vpc" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name = "${var.environment}-vpc"
-  }
-}
-
-resource "aws_subnet" "public_subnet" {
-  vpc_id                  = aws_vpc.custom_vpc.id
-  cidr_block              = var.public_subnet_cidr
-  map_public_ip_on_launch = true
-  availability_zone       = "${var.aws_region}a"
-
-  tags = {
-    Name = "${var.environment}-public-subnet"
-  }
-}
-
-resource "aws_internet_gateway" "igw" {
+resource "aws_security_group" "allow_http_and_ssh" {
+  name        = "allow_http_and_ssh"
+  description = "Allow HTTP traffic and SSH traffic on port 80 and 22"
   vpc_id = aws_vpc.custom_vpc.id
-
-  tags = {
-    Name = "${var.environment}-igw"
-  }
-}
-
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.custom_vpc.id
-
-  tags = {
-    Name = "${var.environment}-public-rt"
-  }
-}
-
-resource "aws_route" "internet_access" {
-  route_table_id         = aws_route_table.public_rt.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.igw.id
-}
-
-resource "aws_route_table_association" "public_subnet_association" {
-  subnet_id      = aws_subnet.public_subnet.id
-  route_table_id = aws_route_table.public_rt.id
-}
-
-resource "aws_security_group" "web_security_group" {
-  name        = "${var.environment}-web-security-group"
-  description = "Allow HTTP inbound traffic"
-  vpc_id      = aws_vpc.custom_vpc.id
 
   ingress {
     from_port   = 80
@@ -61,14 +13,12 @@ resource "aws_security_group" "web_security_group" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  
+    cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -77,24 +27,33 @@ resource "aws_security_group" "web_security_group" {
   }
 
   tags = {
-    Name = "${var.environment}-web-security-group"
+    Name= "Appserver-sg"
   }
 }
 
-resource "aws_instance" "app" {
-  ami                         = var.ami_id
-  instance_type               = var.instance_type
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-  key_name                    = var.key_name
-  subnet_id                   = aws_subnet.public_subnet.id
-  vpc_security_group_ids      = [aws_security_group.web_security_group.id]
+locals {
+  repo_url = var.stage == "prod" && var.github_token != "" && var.github_private_repo != "" ? "https://${var.github_token}@github.com/${var.github_private_repo}.git" :var.github_repo_url
+}
+
+resource "aws_instance" "app_server" {
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  key_name = "debasishkey"
+  subnet_id = aws_subnet.public_subnet.id
+  vpc_security_group_ids = [aws_security_group.allow_http_and_ssh.id]
+  iam_instance_profile = var.stage == "dev" ? aws_iam_instance_profile.ec2_instance_profile_b[0].name : data.aws_iam_instance_profile.ec2_instance_profile_b[0].name
   associate_public_ip_address = true
-  user_data = templatefile("${path.module}/user_data.sh", {
-    logs_bucket_name = var.logs_bucket_name
-  })
+
+  user_data = templatefile("${path.module}/user_data.sh.tftpl", {
+    log_s3_bucket_name=var.log_s3_bucket_name
+    shutdown_after_minutes = var.shutdown_after_minutes
+    stage= var.stage
+    TIMESTAMP= timestamp()
+    REPO_URL= local.repo_url
+})
 
   tags = {
-    Name = "${var.environment}-app-instance"
+    Name  = "AppServer-${var.stage}"
+    Stage = var.stage
   }
 }
-

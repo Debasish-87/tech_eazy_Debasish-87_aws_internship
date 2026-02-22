@@ -1,36 +1,93 @@
-resource "aws_iam_role" "s3_read_role" {
-  name = "${var.environment}_s3_read_role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+resource "aws_iam_role" "role_a_readonly" {
+  count = var.stage =="dev" ? 1:0
+  name = "readonly_s3_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect    = "Allow",
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
 }
 
-resource "aws_iam_role" "s3_write_role" {
-  name = "${var.environment}_s3_write_role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+resource "aws_iam_policy" "readonly_policy" {
+  count = var.stage =="dev" ? 1:0
+  name        = "readonly_s3_policy"
+  description = "Allows read-only access to S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        Effect   = "Allow",
+        Resource = ["arn:aws:s3:::${var.log_s3_bucket_name}",
+                    "arn:aws:s3:::${var.log_s3_bucket_name}/*"]
+      }
+    ]
+  })
 }
 
-resource "aws_iam_policy" "s3_read_policy" {
-  name   = "${var.environment}_s3_read_policy"
-  policy = data.aws_iam_policy_document.s3_read_policy.json
-}
-
-resource "aws_iam_policy" "s3_write_policy" {
-  name   = "${var.environment}_s3_write_policy"
-  policy = data.aws_iam_policy_document.s3_write_policy.json
-}
-
-resource "aws_iam_role_policy_attachment" "attach_read" {
-  role       = aws_iam_role.s3_read_role.name
-  policy_arn = aws_iam_policy.s3_read_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "attach_write" {
-  role       = aws_iam_role.s3_write_role.name
-  policy_arn = aws_iam_policy.s3_write_policy.arn
-}
-
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.environment}_ec2_profile"
-  role = aws_iam_role.s3_write_role.name
+resource "aws_iam_role_policy_attachment" "readonly_attach" {
+  count = var.stage =="dev" ? 1:0
+  role       = aws_iam_role.role_a_readonly[0].name
+  policy_arn = aws_iam_policy.readonly_policy[0].arn
 }
 
 
+resource "aws_iam_role" "role_b_uploader" {
+  count = var.stage =="dev" ? 1:0
+  name = "uploadonly_s3_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect    = "Allow",
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_policy" "uploadonly_policy" {
+  count = var.stage =="dev" ? 1:0
+  name        = "uploadonly_s3_policy"
+  description = "Allows write-only access to S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "s3:PutObject",
+          "s3:CreateBucket",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        Effect   = "Allow",
+        Resource = ["arn:aws:s3:::${var.log_s3_bucket_name}", 
+                    "arn:aws:s3:::${var.log_s3_bucket_name}/*"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "uploadonly_attach" {
+  count = var.stage =="dev" ? 1:0
+  role       = aws_iam_role.role_b_uploader[0].name
+  policy_arn = aws_iam_policy.uploadonly_policy[0].arn
+}
+
+data "aws_iam_role" "role_b_uploader" {
+  count = var.stage =="prod" ? 1:0
+  name = "uploadonly_s3_role"
+}
