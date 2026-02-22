@@ -1,178 +1,245 @@
-# DevOps Assignment – Automate EC2 Deployment on AWS
+# Terraform Dev → Prod CI/CD Pipeline
 
-## Objective
-
-This project automates the provisioning of an EC2 instance on AWS using Terraform and deploys a Java Spring Boot application. It ensures secure AWS usage, cost control through auto-shutdown, and environment-specific configurations (Dev/Prod).
+This repository contains a complete infrastructure-as-code (IaC) setup using **Terraform** for provisioning AWS resources and a **GitHub Actions CI/CD pipeline** for deploying a Java-based web application across multiple environments (`dev` and `prod`).
 
 ---
 
-## What This Project Does
+## Table of Contents
 
-1. Creates an EC2 instance inside a custom VPC
-2. Installs Java 19/21 on the instance
-3. Clones a GitHub Spring Boot application and starts it
-4. Makes the app available on port 80
-5. Shuts down the EC2 instance automatically after a defined time
-6. Uses separate configuration files for Dev and Prod environments
-7. Keeps AWS credentials secure using environment variables
-8. Includes a Postman collection for API testing
-
----
-
-## Tech Used
-
-| Tool         | Role                        |
-| ------------ | --------------------------- |
-| Terraform    | Infrastructure provisioning |
-| AWS EC2      | Compute resource            |
-| Shell Script | App deployment on EC2       |
-| GitHub       | App source & versioning     |
-| Postman      | API testing                 |
+1. Project Overview  
+2. Features  
+3. Prerequisites  
+4. Directory Structure  
+5. Terraform Usage (Manual)  
+6. GitHub Actions Workflow  
+7. CI/CD Deployment Flow  
+8. Application Health Check  
+9. Auto Shutdown  
+10. Log Storage  
+11. Postman Collection  
+12. License
 
 ---
 
-## Project Structure
+## 1. Project Overview
+
+This project automates the process of:
+- Creating EC2 infrastructure using Terraform
+- Installing dependencies and deploying a Java app using a startup script
+- Uploading system and application logs to S3
+- Validating app readiness via a health check
+- Promoting changes from `dev` to `prod` using GitHub Actions
+
+---
+
+## 2. Features
+
+- Separate Terraform configurations for `dev` and `prod`
+- Auto-provisioning EC2, IAM roles, VPC, and S3 buckets
+- GitHub Actions for CI/CD automation
+- Auto-shutdown mechanism to control costs
+- Upload logs and deployment status to S3
+- Workspace-based isolation for environments
+
+---
+
+## 3. Prerequisites
+
+Before using this project, ensure the following:
+
+- [Terraform CLI](https://developer.hashicorp.com/terraform/downloads) installed
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) configured with appropriate IAM access
+- GitHub repository with the following secrets set:
+
+| Secret Name              | Description                                      |
+|--------------------------|--------------------------------------------------|
+| `AWS_ACCESS_KEY_ID`      | AWS access key                                  |
+| `AWS_SECRET_ACCESS_KEY`  | AWS secret key                                  |
+| `PRIVATE_REPO_TOKEN`     | GitHub token to access private repositories     |
+| `PRIVATE_REPO`           | e.g., `username/repository` (Java app repo URL) |
+
+---
+
+## 4. Directory Structure
 
 ```
 
-tech_eazy_Debasish-87_aws_internship/
-
-├── main.tf                  # Core infrastructure
-├── variables.tf             # Input variables
-├── outputs.tf               # EC2 output values
-├── user_data.sh             # EC2 startup automation
-├── dev_config.tfvars        # Dev environment configuration
+.
+├── dev\_config.tfvars            # Dev environment variables
+├── prod\_config.tfvars           # Prod environment variables
+├── main.tf                      # EC2 provisioning
+├── vpc.tf                       # Networking setup
+├── iam\_roles.tf                 # IAM roles for EC2
+├── iam\_instance\_profile.tf      # EC2 instance profile
+├── s3.tf                        # S3 bucket creation
+├── outputs.tf                   # Output variables
+├── variables.tf                 # Input variables
+├── user\_data.sh.tftpl           # Startup script to deploy the app
+├── config/
+│   ├── dev.json
+│   └── prod.json
 ├── resources/
-│   └── postman_collection.json
-└── README.md
+│   └── techeazy-app.postman\_collection.json
+└── .github/workflows/
+└── deploy.yml               # GitHub Actions workflow file
 
-```
+````
 
 ---
 
-## How to Deploy
+## 5. Terraform Usage (Manual)
 
-### Step 1: Clone the Repository
+**Initialize Terraform and Create Dev Workspace**
 
-```
-
-git clone https://github.com/Debasish-87/tech_eazy_Debasish-87_aws_internship.git
-cd tech_eazy_Debasish-87_aws_internship
-
-```
-
-### Step 2: Set AWS Credentials
-
-Export your AWS credentials using environment variables:
-
-```
-
-export AWS_ACCESS_KEY_ID=your-access-key
-export AWS_SECRET_ACCESS_KEY=your-secret-key
-
-```
-
-### Step 3: Initialize Terraform
-
-```
-
+```bash
 terraform init
+terraform workspace new dev
+````
 
+**Apply Dev Configuration**
+
+```bash
+terraform apply -var-file=dev_config.tfvars
 ```
 
-### Step 4: Apply Configuration
+**For Production**
 
-Run this command for the Dev environment:
-
-```
-
-terraform apply -var-file="dev_config.tfvars"
-
-```
-
-Terraform will:
-
-- Create VPC, subnet, and security group
-- Launch an EC2 instance
-- Install Java
-- Clone and start the Spring Boot app
-- Schedule automatic shutdown
-
----
-
-## Access the Application
-
-After deployment, open the app in your browser using the public IP:
-
-```
-
-http://<public-ec2-ip>
-
-```
-
-The public IP will be visible in the Terraform output as `instance_public_ip`.
-
----
-
-## API Testing
-
-Use the Postman collection provided:
-
-```
-
-resources/postman_collection.json
-
-```
-
-Import it into Postman and send requests to the application.
-
----
-
-## Cleanup
-
-To delete everything and avoid AWS charges:
-
-```
-
-terraform destroy -var-file="dev_config.tfvars"
-
+```bash
+terraform workspace new prod
+terraform apply -var-file=prod_config.tfvars \
+  -var="stage=prod" \
+  -var="github_token=<your-token>" \
+  -var="github_private_repo=<your-user>/<your-private-repo>"
 ```
 
 ---
 
-## Highlights
+## 6. GitHub Actions Workflow
 
-- Modular environment-based Terraform setup
-- Secure handling of AWS credentials
-- Auto-shutdown to reduce idle cost
-- App publicly accessible on port 80
-- Postman collection included for quick testing
+### Trigger Dev Deployment:
+
+Push to the branch `feature/assignment-4`:
+
+```bash
+git push origin feature/assignment-4
+```
+
+### Trigger Prod Deployment:
+
+Create and push the tag `deploy-prod`:
+
+```bash
+git tag deploy-prod
+git push origin deploy-prod
+```
+
+You can also manually trigger the workflow from the **GitHub Actions → Run workflow** button using `workflow_dispatch`.
 
 ---
 
-## Submission Instructions
+## 7. CI/CD Deployment Flow
 
-1. Push the project to a public GitHub repository named:
+1. `dev` stage is deployed using `dev_config.tfvars`
+2. Application is validated via HTTP health check
+3. On success, `prod` stage is automatically deployed using `prod_config.tfvars`
+4. Application readiness is confirmed by checking:
 
-```
-
-tech_eazy_<your-github-username>_aws_internship
-
-```
-
-Example: `tech_eazy_Debasish-87_aws_internship`
-
-2. Submit the GitHub repo URL in the form:
-
-https://forms.gle/9DfAcyCHsTiQ8qaW7
+   * S3 path: `s3://<bucket>/prod/status/app_ready.txt`
+   * Health check returns HTTP 200
+5. Logs are uploaded to S3
+6. EC2 instance is scheduled to auto-shutdown
 
 ---
 
-## Author
+## 8. Application Health Check
 
-Debasish Mohanty  
-Cloud DevSecOps | Terraform | AWS | CI/CD  
-GitHub: https://github.com/Debasish-87
+The GitHub workflow performs health checks by sending a request to:
+
 ```
+http://<INSTANCE_PUBLIC_IP>
+```
+
+It retries up to 10 times with a 10-second delay between attempts.
+
+---
+
+## 9. Auto Shutdown
+
+To save AWS costs, the EC2 instance is automatically shut down after a default period (30 minutes).
+
+You can configure this using the Terraform variable:
+
+```hcl
+shutdown_after_minutes = 30
+```
+
+---
+
+## 10. Log Storage
+
+Application and system logs are uploaded to S3:
+
+```
+s3://<bucket-name>/<stage>/logs/app_logs/
+s3://<bucket-name>/<stage>/logs/system_logs/
+```
+
+---
+
+
+## Screenshot -
+
+![Screenshot from 2025-06-28 04-29-30](https://github.com/user-attachments/assets/0675449e-3081-46a5-a8b5-91ca1ec3975b)
+
+![Screenshot from 2025-06-28 04-29-44](https://github.com/user-attachments/assets/4c2304c2-089a-409c-8663-2fe770bbbcda)
+
+![Screenshot from 2025-06-28 04-29-57](https://github.com/user-attachments/assets/c5126108-ee0a-4a34-b838-0dfa57717b04)
+
+
+![Screenshot from 2025-06-28 04-31-39](https://github.com/user-attachments/assets/b82bb809-065a-4103-9194-32b1db198678)
+
+
+![Screenshot from 2025-06-28 04-32-00](https://github.com/user-attachments/assets/068ff02a-7def-4ea5-9f18-47297d0c23d3)
+
+
+![Screenshot from 2025-06-28 04-32-19](https://github.com/user-attachments/assets/69460d2b-8e0a-4596-97be-45755e1ae84c)
+
+
+
+![Screenshot from 2025-06-28 04-32-30](https://github.com/user-attachments/assets/867f6b7a-f646-40ba-a98d-08b11ba294b3)
+
+
+![Screenshot from 2025-06-28 04-32-47](https://github.com/user-attachments/assets/cd611aa8-f0cf-4e70-9a02-5ff2001c2d56)
+
+
+![Screenshot from 2025-06-28 04-32-57](https://github.com/user-attachments/assets/84f67970-de05-453d-a44d-c00ceb979136)
+
+### Dev Stage APP deploy -
+
+![Screenshot from 2025-06-28 04-31-09](https://github.com/user-attachments/assets/3ef985e7-407e-4a96-9fb9-854d1c918fa7)
+
+### Prod Stage APP deploy -
+
+![Screenshot from 2025-06-28 04-31-19](https://github.com/user-attachments/assets/2a875196-d793-443d-ac66-309149c74fee)
+
+
+
+
+
+## 11. Postman Collection
+
+Use the following file to test your application manually:
+
+```
+resources/techeazy-app.postman_collection.json
+```
+
+Import it into Postman and execute test cases as needed.
+
+---
+
+## 12. License
+
+This project is licensed under the MIT License.
 
 ---
