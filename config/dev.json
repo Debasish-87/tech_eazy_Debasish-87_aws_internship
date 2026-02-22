@@ -1,0 +1,8 @@
+{
+  "app_name": "TechEazyApp-dev-app",
+  "environment": "development",
+  "port": 8080,
+  "debug":true,
+  "log_level": "DEBUG",
+  "instance_type": "t2.micro"
+}
